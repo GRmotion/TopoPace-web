@@ -8,65 +8,79 @@ interface Props {
 
 function bufferStr(min: number | null): string {
   if (min === null) return '—';
-  return `${min >= 0 ? '+' : ''}${Math.round(min)}m`;
+  return `${min >= 0 ? '+' : ''}${Math.round(min)}min`;
+}
+
+function generateHtml(plan: RunPlan, results: CheckpointResult[]): string {
+  const goalH = Math.floor(plan.goalTimeSec / 3600);
+  const goalMin = Math.floor((plan.goalTimeSec % 3600) / 60);
+  const date = new Date().toLocaleDateString();
+
+  const rows = results.map((r, i) => `
+    <tr>
+      <td>${i + 1}</td>
+      <td class="name">${r.name}${r.note ? `<div class="note">${r.note}</div>` : ''}</td>
+      <td>${(r.distM / 1000).toFixed(1)}</td>
+      <td>${formatPace(r.segmentPaceSecPerKm)}</td>
+      <td class="bold">${formatTime(r.etaMs)}</td>
+      <td>${r.type === 'aid' ? `${r.plannedStopMin}min` : '—'}</td>
+      <td class="bold">${formatTime(r.leaveAtMs)}</td>
+      <td>${r.cutoffTime ?? '—'}</td>
+      <td class="${r.cutoffBufferMin !== null && r.cutoffBufferMin < 10 ? 'red' : ''}">${bufferStr(r.cutoffBufferMin)}</td>
+    </tr>
+  `).join('');
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8"/>
+  <title>TopoPace — ${plan.name}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; font-size: 9pt; color: #000; padding: 12mm; }
+    h1 { font-size: 12pt; margin-bottom: 2mm; }
+    .meta { font-size: 8pt; color: #555; margin-bottom: 5mm; }
+    table { width: 100%; border-collapse: collapse; }
+    th { font-size: 7.5pt; text-transform: uppercase; letter-spacing: .04em; padding: 2px 5px; border-bottom: 1.5px solid #000; text-align: center; white-space: nowrap; }
+    td { padding: 2.5px 5px; border-bottom: .5px solid #ccc; text-align: center; vertical-align: top; }
+    td.name { text-align: left; font-weight: 600; }
+    .note { font-size: 7.5pt; font-weight: 400; color: #555; margin-top: 1px; }
+    .bold { font-weight: 700; }
+    .red { color: #c00; font-weight: 700; }
+    footer { margin-top: 5mm; font-size: 7.5pt; color: #777; }
+    @media print { @page { margin: 10mm; } }
+  </style>
+</head>
+<body>
+  <h1>TopoPace — ${plan.name}</h1>
+  <div class="meta">Start: ${plan.raceStartTime} &nbsp;·&nbsp; Goal: ${goalH}h ${goalMin}min &nbsp;·&nbsp; Generated: ${date}</div>
+  <table>
+    <thead>
+      <tr>
+        <th>#</th><th style="text-align:left">Checkpoint</th><th>km</th>
+        <th>Pace</th><th>ETA</th><th>Stop</th><th>Leave</th><th>Cutoff</th><th>Buffer</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <footer>TopoPace race planner · topopace.app</footer>
+</body>
+</html>`;
 }
 
 export default function PrintPlan({ plan, results }: Props) {
-  const goalH = Math.floor(plan.goalTimeSec / 3600);
-  const goalMin = Math.floor((plan.goalTimeSec % 3600) / 60);
+  function handlePrint() {
+    const win = window.open('', '_blank');
+    if (!win) return;
+    win.document.write(generateHtml(plan, results));
+    win.document.close();
+    win.focus();
+    setTimeout(() => win.print(), 300);
+  }
 
   return (
-    <>
-      <button
-        className="primary no-print"
-        style={{ padding: '10px 24px' }}
-        onClick={() => window.print()}
-      >
-        🖨 Print / Save as PDF
-      </button>
-
-      <div className="print-only" style={{ fontFamily: 'Arial, sans-serif', fontSize: '9pt', color: '#000' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6, borderBottom: '1px solid #000', paddingBottom: 4 }}>
-          <strong style={{ fontSize: '11pt' }}>TopoPace — {plan.name}</strong>
-          <span>Start: {plan.raceStartTime} · Goal: {goalH}h {goalMin}min</span>
-        </div>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid #000', fontSize: '8pt' }}>
-              <th style={pth}>#</th>
-              <th style={{ ...pth, textAlign: 'left' }}>Checkpoint</th>
-              <th style={pth}>km</th>
-              <th style={pth}>Pace</th>
-              <th style={pth}>ETA</th>
-              <th style={pth}>Stop</th>
-              <th style={pth}>Leave</th>
-              <th style={pth}>Cutoff</th>
-              <th style={pth}>Buffer</th>
-            </tr>
-          </thead>
-          <tbody>
-            {results.map((r, i) => (
-              <tr key={r.id} style={{ borderBottom: '0.5px solid #ccc' }}>
-                <td style={ptd}>{i + 1}</td>
-                <td style={{ ...ptd, textAlign: 'left', fontWeight: 600 }}>{r.name}</td>
-                <td style={ptd}>{(r.distM / 1000).toFixed(1)}</td>
-                <td style={ptd}>{formatPace(r.segmentPaceSecPerKm)}</td>
-                <td style={{ ...ptd, fontWeight: 700 }}>{formatTime(r.etaMs)}</td>
-                <td style={ptd}>{r.type === 'aid' ? `${r.plannedStopMin}m` : '—'}</td>
-                <td style={{ ...ptd, fontWeight: 700 }}>{formatTime(r.leaveAtMs)}</td>
-                <td style={ptd}>{r.cutoffTime ?? '—'}</td>
-                <td style={ptd}>{bufferStr(r.cutoffBufferMin)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <div style={{ marginTop: 6, fontSize: '7.5pt', color: '#555' }}>
-          Generated {new Date().toLocaleDateString()} · TopoPace
-        </div>
-      </div>
-    </>
+    <button className="primary" style={{ padding: '10px 24px', width: '100%' }} onClick={handlePrint}>
+      🖨 Print / Save as PDF
+    </button>
   );
 }
-
-const pth: React.CSSProperties = { padding: '2px 6px', textAlign: 'center', fontWeight: 600 };
-const ptd: React.CSSProperties = { padding: '2px 6px', textAlign: 'center' };

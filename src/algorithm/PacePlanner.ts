@@ -1,4 +1,4 @@
-import type { TrackPoint, TrackSegment, Checkpoint, CheckpointResult, PersonalProfile, RunPlan } from '../models/types';
+import type { TrackPoint, TrackSegment, Checkpoint, CheckpointResult, RunPlan } from '../models/types';
 import { DEFAULT_PROFILE } from '../models/types';
 import { costFactor } from './MinettiModel';
 
@@ -17,7 +17,7 @@ function interpolateEle(points: TrackPoint[], distM: number): number {
   return p0.ele + t * (p1.ele - p0.ele);
 }
 
-function buildSegments(points: TrackPoint[], profile: PersonalProfile): TrackSegment[] {
+function buildRawSegments(points: TrackPoint[], profile: typeof DEFAULT_PROFILE): TrackSegment[] {
   const totalDistM = points[points.length - 1].distFromStart;
   const segments: TrackSegment[] = [];
   let segStart = 0;
@@ -28,7 +28,6 @@ function buildSegments(points: TrackPoint[], profile: PersonalProfile): TrackSeg
     const horizDist = segEnd - segStart;
     const grade = horizDist > 0 ? (eleEnd - eleStart) / horizDist : 0;
     const fatigueRamp = 1 + profile.fatigueRatePerHundredKm * (segStart / totalDistM);
-    // targetPaceSecPerKm temporarily stores cost factor; scaled below
     segments.push({
       startDist: segStart,
       endDist: segEnd,
@@ -41,12 +40,11 @@ function buildSegments(points: TrackPoint[], profile: PersonalProfile): TrackSeg
 }
 
 export function buildPlan(plan: RunPlan): TrackSegment[] {
-  const { route, checkpoints, goalTimeSec } = plan;
   const profile = plan.profile ?? DEFAULT_PROFILE;
-  const totalStopSec = checkpoints.reduce((sum, cp) => sum + cp.plannedStopMin * 60, 0);
-  const runTimeSec = goalTimeSec - totalStopSec;
+  const totalStopSec = plan.checkpoints.reduce((sum, cp) => sum + cp.plannedStopMin * 60, 0);
+  const runTimeSec = plan.goalTimeSec - totalStopSec;
 
-  const rawSegs = buildSegments(route, profile);
+  const rawSegs = buildRawSegments(plan.route, profile);
   const flatEquiv = rawSegs.reduce((s, seg) => s + seg.targetPaceSecPerKm * (seg.endDist - seg.startDist), 0);
   const baseSecPerM = runTimeSec / flatEquiv;
 
@@ -69,16 +67,9 @@ export function computeScheduleFull(plan: RunPlan, segments: TrackSegment[]): Ch
   let prevDistM = 0;
 
   return cps.map(cp => {
-    const runSegs = segments.filter(s => s.endDist > prevDistM && s.startDist < cp.distM);
-    for (const seg of runSegs) {
-      const from = Math.max(seg.startDist, prevDistM);
-      const to = Math.min(seg.endDist, cp.distM);
-      const distKm = (to - from) / 1000;
-      elapsedMs += distKm * seg.targetPaceSecPerKm * 1000;
-    }
-
+    elapsedMs += integrateSegmentMs(segments, prevDistM, cp.distM);
     const etaMs = startMs + elapsedMs;
-    const stopMs = cp.plannedStopMin * 60 * 1000;
+    const stopMs = cp.plannedStopMin * 60000;
     const leaveAtMs = etaMs + stopMs;
     elapsedMs += stopMs;
 
@@ -93,6 +84,45 @@ export function computeScheduleFull(plan: RunPlan, segments: TrackSegment[]): Ch
   });
 }
 
+export function paceAtDist(segments: TrackSegment[], distM: number): number {
+  for (const seg of segments) {
+    if (distM >= seg.startDist && distM < seg.endDist) return seg.targetPaceSecPerKm;
+  }
+  return segments.length > 0 ? segments[segments.length - 1].targetPaceSecPerKm : 300;
+}
+
+export function elapsedMsAtDist(
+  segments: TrackSegment[],
+  checkpoints: Checkpoint[],
+  raceStartTime: string,
+  targetDistM: number,
+): number {
+  const startMs = parseTimeToMs(raceStartTime);
+  const sortedCps = checkpoints
+    .filter(cp => cp.distM < targetDistM)
+    .sort((a, b) => a.distM - b.distM);
+
+  let elapsedMs = 0;
+  let prevDistM = 0;
+  for (const cp of sortedCps) {
+    elapsedMs += integrateSegmentMs(segments, prevDistM, cp.distM);
+    elapsedMs += cp.plannedStopMin * 60000;
+    prevDistM = cp.distM;
+  }
+  elapsedMs += integrateSegmentMs(segments, prevDistM, targetDistM);
+  return startMs + elapsedMs;
+}
+
+function integrateSegmentMs(segments: TrackSegment[], from: number, to: number): number {
+  let ms = 0;
+  for (const seg of segments) {
+    if (seg.endDist <= from || seg.startDist >= to) continue;
+    const cover = Math.min(seg.endDist, to) - Math.max(seg.startDist, from);
+    ms += (cover / 1000) * seg.targetPaceSecPerKm * 1000;
+  }
+  return ms;
+}
+
 function averagePaceInRange(segments: TrackSegment[], fromDist: number, toDist: number): number {
   let paceSum = 0, distSum = 0;
   for (const seg of segments) {
@@ -104,7 +134,7 @@ function averagePaceInRange(segments: TrackSegment[], fromDist: number, toDist: 
   return distSum > 0 ? paceSum / distSum : 300;
 }
 
-function parseTimeToMs(time: string): number {
+export function parseTimeToMs(time: string): number {
   const [h, m] = time.split(':').map(Number);
   return ((h * 60 + m) * 60) * 1000;
 }

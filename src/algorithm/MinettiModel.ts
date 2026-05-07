@@ -19,6 +19,8 @@ function energyCost(grade: number): number {
 export function costFactor(grade: number, profile?: PersonalProfile): number {
   const raw = energyCost(grade) / FLAT_COST;
   if (!profile) return raw;
-  const sensitivity = grade >= 0 ? profile.climbFactor : profile.descentFactor;
-  return 1.0 + sensitivity * (raw - 1.0);
+  // Model A: personal multiplier scales Minetti directly
+  // climbFactor=1.0 means exactly Minetti; 1.2 means 20% slower on uphills
+  const multiplier = grade >= 0 ? profile.climbFactor : profile.descentFactor;
+  return raw * multiplier;
 }

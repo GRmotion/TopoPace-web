@@ -25,9 +25,11 @@ export interface Checkpoint {
 }
 
 export interface PersonalProfile {
-  climbFactor: number;           // multiplier vs Minetti default (1.0 = default)
+  climbFactor: number;               // pace multiplier vs Minetti (1.0 = Minetti, 1.2 = 20% slower)
   descentFactor: number;
-  fatigueRatePerHundredKm: number; // % slower per 100 km (0.0 = none, 0.08 = 8%)
+  fatigueRatePerHundredKm: number;   // additional slowdown per 100 km (0.08 = 8%)
+  maxClimbPaceSecPerKm?: number;     // fastest observed pace on steep uphills — hard cap
+  maxDescentPaceSecPerKm?: number;   // fastest observed pace on steep downhills — hard cap
 }
 
 export const DEFAULT_PROFILE: PersonalProfile = {

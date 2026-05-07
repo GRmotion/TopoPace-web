@@ -82,18 +82,27 @@ export default function RouteMap({ points, checkpoints, hoverDistM, onClickDist 
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    hoverMarkerRef.current?.remove();
-    hoverMarkerRef.current = null;
-    if (hoverDistM == null || points.length === 0) return;
+    if (hoverDistM == null || points.length === 0) {
+      hoverMarkerRef.current?.remove();
+      hoverMarkerRef.current = null;
+      return;
+    }
     const pt = findClosestByDist(points, hoverDistM);
     if (!pt) return;
-    hoverMarkerRef.current = L.circleMarker([pt.lat, pt.lon], {
-      radius: 7,
-      color: '#fff',
-      weight: 2,
-      fillColor: '#4caf50',
-      fillOpacity: 1,
-    }).addTo(map);
+    const latlng: L.LatLngTuple = [pt.lat, pt.lon];
+    if (hoverMarkerRef.current) {
+      hoverMarkerRef.current.setLatLng(latlng);
+    } else {
+      hoverMarkerRef.current = L.circleMarker(latlng, {
+        radius: 8,
+        color: '#fff',
+        weight: 2.5,
+        fillColor: '#4caf50',
+        fillOpacity: 1,
+        interactive: false,
+        pane: 'markerPane',
+      }).addTo(map);
+    }
   }, [hoverDistM, points]);
 
   useEffect(() => {

@@ -48,10 +48,17 @@ export function buildPlan(plan: RunPlan): TrackSegment[] {
   const flatEquiv = rawSegs.reduce((s, seg) => s + seg.targetPaceSecPerKm * (seg.endDist - seg.startDist), 0);
   const baseSecPerM = runTimeSec / flatEquiv;
 
-  return rawSegs.map(seg => ({
-    ...seg,
-    targetPaceSecPerKm: baseSecPerM * seg.targetPaceSecPerKm * 1000,
-  }));
+  return rawSegs.map(seg => {
+    let pace = baseSecPerM * seg.targetPaceSecPerKm * 1000;
+    // Apply max-speed caps from personal calibration (higher sec/km = slower = cap at observed minimum)
+    if (seg.gradePercent >= 8 && profile.maxClimbPaceSecPerKm) {
+      pace = Math.max(pace, profile.maxClimbPaceSecPerKm);
+    }
+    if (seg.gradePercent <= -8 && profile.maxDescentPaceSecPerKm) {
+      pace = Math.max(pace, profile.maxDescentPaceSecPerKm);
+    }
+    return { ...seg, targetPaceSecPerKm: pace };
+  });
 }
 
 export function computeScheduleFull(plan: RunPlan, segments: TrackSegment[]): CheckpointResult[] {

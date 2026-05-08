@@ -1,4 +1,4 @@
-import type { TrackPoint, TrackSegment, Checkpoint, CheckpointResult, RunPlan } from '../models/types';
+import type { TrackPoint, TrackSegment, Checkpoint, CheckpointResult, RunPlan, TerrainSegment } from '../models/types';
 import { DEFAULT_PROFILE } from '../models/types';
 import { costFactor } from './MinettiModel';
 
@@ -39,18 +39,33 @@ function buildRawSegments(points: TrackPoint[], profile: typeof DEFAULT_PROFILE)
   return segments;
 }
 
+// Returns terrain multiplier for a 50m route segment (uses midpoint)
+function terrainMult(terrain: TerrainSegment[], startM: number, endM: number): number {
+  const midKm = (startM + endM) / 2000;
+  for (const t of terrain) {
+    if (midKm >= t.startKm && midKm <= t.endKm) return 1 + t.difficultyPercent / 100;
+  }
+  return 1;
+}
+
 export function buildPlan(plan: RunPlan): TrackSegment[] {
   const profile = plan.profile ?? DEFAULT_PROFILE;
+  const terrain = plan.terrainSegments ?? [];
   const totalStopSec = plan.checkpoints.reduce((sum, cp) => sum + cp.plannedStopMin * 60, 0);
   const runTimeSec = plan.goalTimeSec - totalStopSec;
 
   const rawSegs = buildRawSegments(plan.route, profile);
-  const flatEquiv = rawSegs.reduce((s, seg) => s + seg.targetPaceSecPerKm * (seg.endDist - seg.startDist), 0);
-  const baseSecPerM = runTimeSec / flatEquiv;
+
+  // Scale factor accounts for terrain: x * sum(rawPace * dist * terrainMult) = runTimeSec
+  const effectiveFlatEquiv = rawSegs.reduce((s, seg) => {
+    const tm = terrainMult(terrain, seg.startDist, seg.endDist);
+    return s + seg.targetPaceSecPerKm * (seg.endDist - seg.startDist) * tm;
+  }, 0);
+  const baseSecPerM = runTimeSec / effectiveFlatEquiv;
 
   return rawSegs.map(seg => {
-    let pace = baseSecPerM * seg.targetPaceSecPerKm * 1000;
-    // Apply max-speed caps from personal calibration (higher sec/km = slower = cap at observed minimum)
+    const tm = terrainMult(terrain, seg.startDist, seg.endDist);
+    let pace = baseSecPerM * seg.targetPaceSecPerKm * 1000 * tm;
     if (seg.gradePercent >= 8 && profile.maxClimbPaceSecPerKm) {
       pace = Math.max(pace, profile.maxClimbPaceSecPerKm);
     }

@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import type { Checkpoint, RunPlan, PersonalProfile, CalibrationResult, CheckpointResult } from './models/types';
+import type { Checkpoint, RunPlan, PersonalProfile, CalibrationResult, CheckpointResult, TerrainSegment } from './models/types';
 import { DEFAULT_PROFILE } from './models/types';
 import type { ParsedRoute } from './parsers/GpxParser';
 import { buildPlan, computeScheduleFull } from './algorithm/PacePlanner';
@@ -22,6 +22,7 @@ export default function App() {
   const [calibrations, setCalibrations] = useState<CalibrationResult[]>([]);
   const [pendingDistM, setPendingDistM] = useState<number | null>(null);
   const [hoverDistM, setHoverDistM] = useState<number | null>(null);
+  const [terrainSegs, setTerrainSegs] = useState<TerrainSegment[]>([]);
 
   // Resizable chart height
   const [chartHeight, setChartHeight] = useState(220);
@@ -30,7 +31,6 @@ export default function App() {
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
       if (!dragRef.current) return;
-      // dragging up = positive delta = taller chart
       const delta = dragRef.current.startY - e.clientY;
       setChartHeight(Math.max(100, Math.min(600, dragRef.current.startH + delta)));
     };
@@ -57,8 +57,9 @@ export default function App() {
       goalTimeSec: (goalH * 60 + goalMin) * 60,
       raceStartTime,
       createdAt: Date.now(),
+      terrainSegments: terrainSegs,
     };
-  }, [route, checkpoints, profile, goalH, goalMin, raceStartTime]);
+  }, [route, checkpoints, profile, goalH, goalMin, raceStartTime, terrainSegs]);
 
   const { segments, results } = useMemo(() => {
     if (!plan || plan.route.length < 2 || plan.goalTimeSec <= 0) return { segments: [], results: [] };
@@ -74,6 +75,7 @@ export default function App() {
   const handleRouteLoad = useCallback((parsed: ParsedRoute) => {
     setRoute(parsed);
     setCheckpoints([]);
+    setTerrainSegs([]);
   }, []);
 
   const handleAdjustStop = useCallback((id: string, deltaMin: number) => {
@@ -86,11 +88,26 @@ export default function App() {
     setPendingDistM(distM);
   }, []);
 
+  const handleMarkSelection = useCallback((startKm: number, endKm: number) => {
+    setTerrainSegs(prev => [...prev, {
+      id: crypto.randomUUID(),
+      startKm, endKm,
+      difficultyPercent: 0,
+    }]);
+  }, []);
+
+  const handleUpdateTerrain = useCallback((id: string, difficultyPercent: number) => {
+    setTerrainSegs(prev => prev.map(t => t.id === id ? { ...t, difficultyPercent } : t));
+  }, []);
+
+  const handleRemoveTerrain = useCallback((id: string) => {
+    setTerrainSegs(prev => prev.filter(t => t.id !== id));
+  }, []);
+
   const canPrint = route && goalH + goalMin > 0 && results.length > 0;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-      {/* Header */}
       <header style={{ background: 'var(--bg-card)', borderBottom: '1px solid var(--border)', padding: '12px 24px', display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ fontSize: 22 }}>🏔</span>
@@ -119,17 +136,14 @@ export default function App() {
           </div>
         ) : (
           <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
-            {/* Left sidebar */}
             <aside style={{ width: 320, minWidth: 280, background: 'var(--bg-card)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 10, padding: 14, overflowY: 'auto', flexShrink: 0 }}>
               <RouteUpload onRoute={handleRouteLoad} compact />
-
               <GoalTimeForm
                 goalH={goalH} goalMin={goalMin}
                 raceStartTime={raceStartTime}
                 onChangeGoal={(h, m) => { setGoalH(h); setGoalMin(m); }}
                 onChangeStart={setRaceStartTime}
               />
-
               <CheckpointPanel
                 checkpoints={checkpoints}
                 totalDistM={route.totalDistM}
@@ -137,17 +151,13 @@ export default function App() {
                 pendingDistM={pendingDistM}
                 onPendingClear={() => setPendingDistM(null)}
               />
-
               <ActivityUpload existing={calibrations} onCalibrate={setCalibrations} onReset={() => setCalibrations([])} />
-
               {canPrint && (
                 <PrintPlan plan={{ ...plan!, segments }} results={results as CheckpointResult[]} />
               )}
             </aside>
 
-            {/* Main panel: map + resizable chart */}
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
-              {/* Map — fills remaining space */}
               <div style={{ flex: 1, minHeight: 150, position: 'relative' }}>
                 <RouteMap
                   points={route.points}
@@ -161,21 +171,15 @@ export default function App() {
               <div
                 onMouseDown={e => { dragRef.current = { startY: e.clientY, startH: chartHeight }; e.preventDefault(); }}
                 style={{
-                  height: 8,
-                  background: 'var(--bg-elevated)',
-                  borderTop: '1px solid var(--border)',
-                  borderBottom: '1px solid var(--border)',
-                  cursor: 'row-resize',
-                  flexShrink: 0,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
+                  height: 8, background: 'var(--bg-elevated)',
+                  borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)',
+                  cursor: 'row-resize', flexShrink: 0,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}
               >
                 <div style={{ width: 32, height: 2, background: 'var(--border)', borderRadius: 2 }} />
               </div>
 
-              {/* Bottom panel: chart + table */}
               <div style={{ background: 'var(--bg)', flexShrink: 0, display: 'flex', flexDirection: 'column', overflow: 'auto' }}>
                 <div style={{ padding: '0 16px', paddingTop: 10 }}>
                   <ElevationChart
@@ -184,11 +188,14 @@ export default function App() {
                     segments={segments}
                     raceStartTime={plan?.raceStartTime}
                     height={chartHeight}
+                    terrainSegments={terrainSegs}
                     onClickDist={distM => setPendingDistM(distM)}
                     onHoverDist={setHoverDistM}
+                    onMarkSelection={handleMarkSelection}
+                    onUpdateTerrain={handleUpdateTerrain}
+                    onRemoveTerrain={handleRemoveTerrain}
                   />
                 </div>
-
                 {results.length > 0 && (
                   <div style={{ padding: '0 16px 16px' }}>
                     <PlanTable results={results as CheckpointResult[]} onAdjustStop={handleAdjustStop} />

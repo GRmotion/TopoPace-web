@@ -38,6 +38,13 @@ export const DEFAULT_PROFILE: PersonalProfile = {
   fatigueRatePerHundredKm: 0.08,
 };
 
+export interface TerrainSegment {
+  id: string;
+  startKm: number;
+  endKm: number;
+  difficultyPercent: number; // positive = slower (rough), negative = faster (road)
+}
+
 export interface RunPlan {
   id: string;
   name: string;
@@ -48,6 +55,7 @@ export interface RunPlan {
   goalTimeSec: number;
   raceStartTime: string; // "HH:MM"
   createdAt: number;
+  terrainSegments?: TerrainSegment[];
 }
 
 export interface CheckpointResult extends Checkpoint {

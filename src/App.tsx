@@ -46,15 +46,21 @@ export default function App() {
   const [hoverDistM, setHoverDistM] = useState<number | null>(null);
   const [terrainSegs, setTerrainSegs] = useState<TerrainSegment[]>([]);
 
-  // Resizable chart height
+  // Resizable chart + table heights
   const [chartHeight, setChartHeight] = useState(220);
-  const dragRef = useRef<{ startY: number; startH: number } | null>(null);
+  const [tableHeight, setTableHeight] = useState(160);
+  const dragRef = useRef<{ startY: number; startH: number; target: 'chart' | 'table' } | null>(null);
 
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
       if (!dragRef.current) return;
-      const delta = dragRef.current.startY - e.clientY;
-      setChartHeight(Math.max(100, Math.min(600, dragRef.current.startH + delta)));
+      if (dragRef.current.target === 'chart') {
+        const delta = dragRef.current.startY - e.clientY;
+        setChartHeight(Math.max(100, Math.min(600, dragRef.current.startH + delta)));
+      } else {
+        const delta = e.clientY - dragRef.current.startY;
+        setTableHeight(Math.max(80, Math.min(600, dragRef.current.startH + delta)));
+      }
     };
     const onUp = () => { dragRef.current = null; };
     window.addEventListener('mousemove', onMove);
@@ -226,9 +232,9 @@ export default function App() {
                 />
               </div>
 
-              {/* Drag handle */}
+              {/* Chart drag handle */}
               <div
-                onMouseDown={e => { dragRef.current = { startY: e.clientY, startH: chartHeight }; e.preventDefault(); }}
+                onMouseDown={e => { dragRef.current = { startY: e.clientY, startH: chartHeight, target: 'chart' }; e.preventDefault(); }}
                 style={{
                   height: 8, background: 'var(--bg-elevated)',
                   borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)',
@@ -239,7 +245,7 @@ export default function App() {
                 <div style={{ width: 32, height: 2, background: 'var(--border)', borderRadius: 2 }} />
               </div>
 
-              <div style={{ background: 'var(--bg)', flexShrink: 0, display: 'flex', flexDirection: 'column', overflow: 'auto' }}>
+              <div style={{ background: 'var(--bg)', flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
                 <div style={{ padding: '0 16px', paddingTop: 10 }}>
                   <ElevationChart
                     points={route.points}
@@ -258,9 +264,23 @@ export default function App() {
                   />
                 </div>
                 {results.length > 0 && (
-                  <div style={{ padding: '0 16px 16px' }}>
-                    <PlanTable results={results as CheckpointResult[]} gelResults={gelResults} onAdjustStop={handleAdjustStop} />
-                  </div>
+                  <>
+                    {/* Table drag handle */}
+                    <div
+                      onMouseDown={e => { dragRef.current = { startY: e.clientY, startH: tableHeight, target: 'table' }; e.preventDefault(); }}
+                      style={{
+                        height: 8, background: 'var(--bg-elevated)',
+                        borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)',
+                        cursor: 'row-resize', flexShrink: 0,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}
+                    >
+                      <div style={{ width: 32, height: 2, background: 'var(--border)', borderRadius: 2 }} />
+                    </div>
+                    <div style={{ height: tableHeight, overflow: 'auto', padding: '0 16px 16px' }}>
+                      <PlanTable results={results as CheckpointResult[]} gelResults={gelResults} onAdjustStop={handleAdjustStop} />
+                    </div>
+                  </>
                 )}
               </div>
             </div>

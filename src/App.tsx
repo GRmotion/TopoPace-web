@@ -3,7 +3,7 @@ import type { Checkpoint, RunPlan, PersonalProfile, CalibrationResult, Checkpoin
 import { DEFAULT_PROFILE, DEFAULT_ADVANCED } from './models/types';
 import { computeGelZones } from './algorithm/GelAdvisor';
 import type { ParsedRoute } from './parsers/GpxParser';
-import { buildPlan, computeScheduleFull } from './algorithm/PacePlanner';
+import { buildPlan, computeScheduleFull, elapsedMsAtDist } from './algorithm/PacePlanner';
 
 import RouteUpload from './components/RouteUpload';
 import ElevationChart from './components/ElevationChart';
@@ -105,6 +105,19 @@ export default function App() {
   }, [advancedSettings.gelEnabled, advancedSettings.gelIntervalMin, segments, checkpoints, terrainSegs]);
 
   const handleGelZonesChange = useCallback((zones: GelZone[]) => setGelZones(zones), []);
+
+  const gelResults = useMemo(() => {
+    if (!gelZones.length || !segments.length) return [];
+    return gelZones
+      .slice()
+      .sort((a, b) => a.centerKm - b.centerKm)
+      .map((zone, i) => ({
+        id: zone.id,
+        distM: zone.centerKm * 1000,
+        etaMs: elapsedMsAtDist(segments, checkpoints, raceStartTime, zone.centerKm * 1000),
+        gelNumber: i + 1,
+      }));
+  }, [gelZones, segments, checkpoints, raceStartTime]);
 
   const handleRouteLoad = useCallback((parsed: ParsedRoute) => {
     setRoute(parsed);
@@ -246,7 +259,7 @@ export default function App() {
                 </div>
                 {results.length > 0 && (
                   <div style={{ padding: '0 16px 16px' }}>
-                    <PlanTable results={results as CheckpointResult[]} onAdjustStop={handleAdjustStop} />
+                    <PlanTable results={results as CheckpointResult[]} gelResults={gelResults} onAdjustStop={handleAdjustStop} />
                   </div>
                 )}
               </div>

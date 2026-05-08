@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import type { TrackPoint, Checkpoint } from '../models/types';
 
@@ -6,19 +6,14 @@ interface Props {
   points: TrackPoint[];
   checkpoints: Checkpoint[];
   hoverDistM?: number | null;
-  onClickDist?: (distM: number) => void;
 }
 
-export default function RouteMap({ points, checkpoints, hoverDistM, onClickDist }: Props) {
+export default function RouteMap({ points, checkpoints, hoverDistM }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const routeLayerRef = useRef<L.Polyline | null>(null);
   const markersRef = useRef<L.Layer[]>([]);
   const hoverMarkerRef = useRef<L.CircleMarker | null>(null);
-  const [addMode, setAddMode] = useState(false);
-  const addModeRef = useRef(false);
-
-  useEffect(() => { addModeRef.current = addMode; }, [addMode]);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -29,17 +24,6 @@ export default function RouteMap({ points, checkpoints, hoverDistM, onClickDist 
     return () => { mapRef.current?.remove(); mapRef.current = null; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-    map.off('click');
-    map.on('click', (e: L.LeafletMouseEvent) => {
-      if (!addModeRef.current || !onClickDist) return;
-      const nearest = findNearest(points, e.latlng.lat, e.latlng.lng);
-      if (nearest) { onClickDist(nearest.distFromStart); setAddMode(false); }
-    });
-  }, [points, onClickDist]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -98,52 +82,13 @@ export default function RouteMap({ points, checkpoints, hoverDistM, onClickDist 
     }
   }, [hoverDistM, points]);
 
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-    map.getContainer().style.cursor = addMode ? 'crosshair' : '';
-  }, [addMode]);
-
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>
       <div ref={containerRef} style={{ width: '100%', height: '100%', borderRadius: 0 }} />
-      {onClickDist && (
-        <button
-          onClick={() => setAddMode(m => !m)}
-          style={{
-            position: 'absolute',
-            top: 12,
-            right: 12,
-            zIndex: 1000,
-            padding: '6px 12px',
-            fontSize: 12,
-            background: addMode ? '#ffd54f' : 'var(--bg-elevated)',
-            color: addMode ? '#000' : 'var(--text)',
-            border: `1px solid ${addMode ? '#ffd54f' : 'var(--border)'}`,
-            borderRadius: 8,
-            cursor: 'pointer',
-            boxShadow: '0 2px 8px rgba(0,0,0,.4)',
-            fontWeight: addMode ? 700 : 400,
-          }}
-        >
-          {addMode ? '📍 Click on map…' : '📍 Add checkpoint'}
-        </button>
-      )}
     </div>
   );
 }
 
-function findNearest(points: TrackPoint[], lat: number, lon: number): TrackPoint | null {
-  if (points.length === 0) return null;
-  let best = points[0];
-  let bestD = Infinity;
-  for (const pt of points) {
-    const dx = pt.lat - lat, dy = pt.lon - lon;
-    const d = dx * dx + dy * dy;
-    if (d < bestD) { bestD = d; best = pt; }
-  }
-  return best;
-}
 
 function findClosestByDist(points: TrackPoint[], distM: number): TrackPoint | null {
   if (points.length === 0) return null;

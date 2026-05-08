@@ -73,7 +73,7 @@ export default function CheckpointPanel({ checkpoints, totalDistM, onChange, pen
 
       {sorted.length === 0 && (
         <div style={{ color: 'var(--text-hint)', fontSize: 12, textAlign: 'center', padding: '4px 0' }}>
-          Click on chart or map (📍 button) to add checkpoints
+          Click on chart to add checkpoints
         </div>
       )}
 

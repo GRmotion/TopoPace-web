@@ -46,6 +46,26 @@ export interface TerrainSegment {
   difficultyPercent: number; // positive = slower (rough), negative = faster (road)
 }
 
+export interface GelZone {
+  id: string;
+  centerKm: number;
+  widthKm: number;
+}
+
+export interface AdvancedSettings {
+  startAggressiveness: number; // -0.20 to +0.20 (negative = conservative/negative split)
+  gelEnabled: boolean;
+  gelIntervalMin: number;
+  gelInSchedule: boolean;     // show gel zones in race schedule + print
+}
+
+export const DEFAULT_ADVANCED: AdvancedSettings = {
+  startAggressiveness: 0,
+  gelEnabled: false,
+  gelIntervalMin: 40,
+  gelInSchedule: true,
+};
+
 export interface RunPlan {
   id: string;
   name: string;
@@ -57,6 +77,7 @@ export interface RunPlan {
   raceStartTime: string; // "HH:MM"
   createdAt: number;
   terrainSegments?: TerrainSegment[];
+  advancedSettings?: AdvancedSettings;
 }
 
 export interface CheckpointResult extends Checkpoint {
@@ -70,4 +91,11 @@ export interface CalibrationResult {
   profile: PersonalProfile;
   activityCount: number;
   distanceKm: number;
+}
+
+export interface GelResult {
+  id: string;
+  distM: number;
+  etaMs: number;
+  gelNumber: number;
 }

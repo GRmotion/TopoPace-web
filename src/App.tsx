@@ -43,6 +43,12 @@ export default function App() {
   }, [advancedSettings]);
 
   const [gelZones, setGelZones] = useState<GelZone[]>([]);
+  const [profileMode, setProfileMode] = useState<'table' | 'chart'>('chart');
+  const chartWrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (profileMode === 'chart') setChartHeight(h => Math.max(h, 300));
+  }, [profileMode]);
 
   const [pendingDistM, setPendingDistM] = useState<number | null>(null);
   const [hoverDistM, setHoverDistM] = useState<number | null>(null);
@@ -51,7 +57,7 @@ export default function App() {
   // Resizable chart + table heights
   const [chartHeight, setChartHeight] = useState(220);
   const [tableHeight, setTableHeight] = useState(160);
-  const dragRef = useRef<{ startY: number; startH: number; target: 'chart' | 'table' } | null>(null);
+  const dragRef = useRef<{ startY: number; startH: number; startH2?: number; target: 'chart' | 'table' } | null>(null);
 
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
@@ -60,8 +66,11 @@ export default function App() {
         const delta = dragRef.current.startY - e.clientY;
         setChartHeight(Math.max(100, Math.min(600, dragRef.current.startH + delta)));
       } else {
-        const delta = e.clientY - dragRef.current.startY;
+        // drag UP = bigger table, chart shrinks by same delta
+        const delta = dragRef.current.startY - e.clientY;
         setTableHeight(Math.max(80, Math.min(600, dragRef.current.startH + delta)));
+        if (dragRef.current.startH2 !== undefined)
+          setChartHeight(Math.max(100, Math.min(600, dragRef.current.startH2 - delta)));
       }
     };
     const onUp = () => { dragRef.current = null; };
@@ -139,10 +148,6 @@ export default function App() {
     ));
   }, []);
 
-  const handleMapClick = useCallback((distM: number) => {
-    setPendingDistM(distM);
-  }, []);
-
   const handleMarkSelection = useCallback((startKm: number, endKm: number) => {
     setTerrainSegs(prev => [...prev, {
       id: crypto.randomUUID(),
@@ -160,6 +165,31 @@ export default function App() {
   }, []);
 
   const canPrint = route && goalH + goalMin > 0 && results.length > 0;
+
+  const getChartSvgHtml = useCallback((): string | null => {
+    const svgEl = chartWrapRef.current?.querySelector('svg');
+    if (!svgEl) return null;
+    const rect = svgEl.getBoundingClientRect();
+    const clone = svgEl.cloneNode(true) as SVGSVGElement;
+    clone.setAttribute('viewBox', `0 0 ${Math.round(rect.width)} ${Math.round(rect.height)}`);
+    clone.setAttribute('width', '100%');
+    clone.setAttribute('height', String(Math.round(rect.height)));
+    clone.style.cursor = '';
+    let svg = new XMLSerializer().serializeToString(clone);
+    // Replace CSS variables with print-safe colours (light background)
+    svg = svg
+      .replace(/var\(--border\)/g, '#d0d4de')
+      .replace(/var\(--bg\)/g, '#ffffff')
+      .replace(/var\(--bg-card\)/g, '#f6f7f9')
+      .replace(/var\(--bg-elevated\)/g, '#ececec')
+      .replace(/var\(--text-secondary\)/g, '#555e78')
+      .replace(/var\(--text-hint\)/g, '#8892aa')
+      .replace(/var\(--text\)/g, '#111827')
+      .replace(/var\(--green\)/g, '#2e7d32')
+      .replace(/var\(--yellow\)/g, '#b8860b')
+      .replace(/var\(--red\)/g, '#b71c1c');
+    return svg;
+  }, []);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
@@ -219,7 +249,13 @@ export default function App() {
                 <AdvancedSettingsPanel settings={advancedSettings} onChange={setAdvancedSettings} />
                 <ActivityUpload existing={calibrations} onCalibrate={setCalibrations} onReset={() => setCalibrations([])} />
                 {canPrint && (
-                  <PrintPlan plan={{ ...plan!, segments }} results={results as CheckpointResult[]} gelResults={advancedSettings.gelInSchedule ? gelResults : []} />
+                  <PrintPlan
+                    plan={{ ...plan!, segments }}
+                    results={results as CheckpointResult[]}
+                    gelResults={advancedSettings.gelInSchedule ? gelResults : []}
+                    profileMode={profileMode}
+                    getChartSvgHtml={getChartSvgHtml}
+                  />
                 )}
               </div>
             </aside>
@@ -230,7 +266,6 @@ export default function App() {
                   points={route.points}
                   checkpoints={checkpoints}
                   hoverDistM={hoverDistM}
-                  onClickDist={handleMapClick}
                 />
               </div>
 
@@ -248,7 +283,22 @@ export default function App() {
               </div>
 
               <div style={{ background: 'var(--bg)', flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
-                <div style={{ padding: '0 16px', paddingTop: 10 }}>
+                {/* Schedule / Profile toggle */}
+                {results.length > 0 && (
+                  <div style={{ padding: '8px 16px 0', display: 'flex', gap: 4 }}>
+                    <button
+                      className={profileMode === 'table' ? 'primary' : 'ghost'}
+                      style={{ fontSize: 11, padding: '3px 14px' }}
+                      onClick={() => setProfileMode('table')}
+                    >Schedule</button>
+                    <button
+                      className={profileMode === 'chart' ? 'primary' : 'ghost'}
+                      style={{ fontSize: 11, padding: '3px 14px' }}
+                      onClick={() => setProfileMode('chart')}
+                    >Profile</button>
+                  </div>
+                )}
+                <div ref={chartWrapRef} style={{ padding: '0 16px', paddingTop: 10 }}>
                   <ElevationChart
                     points={route.points}
                     checkpoints={checkpoints}
@@ -263,13 +313,16 @@ export default function App() {
                     onMarkSelection={handleMarkSelection}
                     onUpdateTerrain={handleUpdateTerrain}
                     onRemoveTerrain={handleRemoveTerrain}
+                    results={results as CheckpointResult[]}
+                    gelResults={advancedSettings.gelInSchedule ? gelResults : []}
+                    showScheduleLabels={profileMode === 'chart'}
                   />
                 </div>
-                {results.length > 0 && (
+                {results.length > 0 && profileMode === 'table' && (
                   <>
                     {/* Table drag handle */}
                     <div
-                      onMouseDown={e => { dragRef.current = { startY: e.clientY, startH: tableHeight, target: 'table' }; e.preventDefault(); }}
+                      onMouseDown={e => { dragRef.current = { startY: e.clientY, startH: tableHeight, startH2: chartHeight, target: 'table' }; e.preventDefault(); }}
                       style={{
                         height: 8, background: 'var(--bg-elevated)',
                         borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)',

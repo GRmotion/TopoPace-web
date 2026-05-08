@@ -1,12 +1,5 @@
-import type { CheckpointResult } from '../models/types';
+import type { CheckpointResult, GelResult } from '../models/types';
 import { formatTime, formatPace } from '../algorithm/PacePlanner';
-
-interface GelResult {
-  id: string;
-  distM: number;
-  etaMs: number;
-  gelNumber: number;
-}
 
 interface Props {
   results: CheckpointResult[];

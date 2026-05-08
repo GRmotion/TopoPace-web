@@ -1,8 +1,10 @@
 import { useRef, useState, useLayoutEffect, useEffect, useMemo } from 'react';
-import type { TrackPoint, Checkpoint, TrackSegment, TerrainSegment, GelZone } from '../models/types';
+import type { TrackPoint, Checkpoint, TrackSegment, TerrainSegment, GelZone, CheckpointResult, GelResult } from '../models/types';
 import { paceAtDist, elapsedMsAtDist, formatTime, formatPace } from '../algorithm/PacePlanner';
 
 const ML = 50, MR = 14, MT = 10, MB = 28;
+const STRIP_TICK_H = 10; // px from chart baseline to first label row
+const STRIP_ROW_H = 36;  // px per row
 
 interface Props {
   points: TrackPoint[];
@@ -18,6 +20,9 @@ interface Props {
   onRemoveTerrain?: (id: string) => void;
   gelZones?: GelZone[];
   onGelZonesChange?: (zones: GelZone[]) => void;
+  results?: CheckpointResult[];
+  gelResults?: GelResult[];
+  showScheduleLabels?: boolean;
 }
 
 interface DPt { km: number; ele: number; }
@@ -58,6 +63,7 @@ export default function ElevationChart({
   points, checkpoints, segments, raceStartTime, height = 200,
   terrainSegments, gelZones, onGelZonesChange, onClickDist, onHoverDist,
   onMarkSelection, onUpdateTerrain, onRemoveTerrain,
+  results, gelResults, showScheduleLabels,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -108,6 +114,39 @@ export default function ElevationChart({
 
   const kmToX = (km: number) => ML + ((km - minKm) / kmSpan) * plotW;
   const eleToY = (ele: number) => MT + (1 - (ele - minEle) / eleRange) * plotH;
+
+  // --- Strip layout (computed in render scope so kmToX is available) ---
+  type StripItem =
+    | { kind: 'cp'; data: CheckpointResult; cpIdx: number }
+    | { kind: 'gel'; data: GelResult };
+
+  const stripItems: StripItem[] = (showScheduleLabels && results && w > 0)
+    ? ([
+        ...results.map((r, i) => ({ kind: 'cp' as const, data: r, cpIdx: i + 1 })),
+        ...(gelResults ?? []).map(g => ({ kind: 'gel' as const, data: g })),
+      ] as StripItem[]).sort((a, b) => a.data.distM - b.data.distM)
+    : [];
+
+  const stripRowAssignments: number[] = [];
+  if (stripItems.length > 0) {
+    const rowRightEdges: number[] = [];
+    for (const item of stripItems) {
+      const x = kmToX(item.data.distM / 1000);
+      const hw = item.kind === 'gel' ? 30 : 48;
+      let row = 0;
+      while (row < rowRightEdges.length && rowRightEdges[row] + 6 > x - hw) row++;
+      if (row >= rowRightEdges.length)
+        for (let r = rowRightEdges.length; r <= row; r++) rowRightEdges.push(-Infinity);
+      rowRightEdges[row] = x + hw;
+      stripRowAssignments.push(row);
+    }
+  }
+  const maxStripRow = stripRowAssignments.length > 0 ? Math.max(...stripRowAssignments) : 0;
+  const stripH = showScheduleLabels
+    ? STRIP_TICK_H + (maxStripRow + 1) * STRIP_ROW_H + 8
+    : 0;
+  const totalSvgH = height + stripH;
+  // --- end strip layout ---
 
   function getSvgXY(e: React.MouseEvent): { x: number; y: number } {
     const rect = svgRef.current?.getBoundingClientRect();
@@ -246,11 +285,11 @@ export default function ElevationChart({
   }
 
   return (
-    <div ref={containerRef} style={{ position: 'relative', width: '100%', height, userSelect: 'none' }}>
+    <div ref={containerRef} style={{ position: 'relative', width: '100%', height: totalSvgH, userSelect: 'none' }}>
       <svg
         ref={svgRef}
         width="100%"
-        height={height}
+        height={totalSvgH}
         style={{ display: 'block', cursor: onClickDist ? 'crosshair' : 'default' }}
         onMouseMove={onMove}
         onMouseLeave={onLeave}
@@ -293,13 +332,24 @@ export default function ElevationChart({
         })()}
 
         {/* Checkpoint lines */}
-        {checkpoints.map(cp => {
+        {checkpoints.map((cp, i) => {
           const x = w > 0 ? kmToX(cp.distM / 1000) : 0;
           const col = cp.type === 'aid' ? (cp.color || '#ffd54f') : '#8b8fa8';
           return (
             <g key={cp.id}>
-              <line x1={x} y1={MT} x2={x} y2={MT + plotH} stroke={col} strokeWidth={1.5} clipPath="url(#pc)" />
-              <text x={x + 3} y={MT + 11} fill={col} fontSize={10} clipPath="url(#pc)">{cp.name}</text>
+              <line x1={x} y1={MT} x2={x} y2={MT + plotH}
+                stroke={col} strokeWidth={1.5}
+                strokeDasharray={showScheduleLabels ? '4,3' : undefined}
+                clipPath="url(#pc)" />
+              {showScheduleLabels ? (
+                <>
+                  <circle cx={x} cy={MT + 9} r={9} fill={col} clipPath="url(#pc)" />
+                  <text x={x} y={MT + 13} textAnchor="middle" fill="#000"
+                    fontSize={9} fontWeight="700" clipPath="url(#pc)">{i + 1}</text>
+                </>
+              ) : (
+                <text x={x + 3} y={MT + 11} fill={col} fontSize={10} clipPath="url(#pc)">{cp.name}</text>
+              )}
             </g>
           );
         })}
@@ -345,13 +395,83 @@ export default function ElevationChart({
         <line x1={ML} y1={MT} x2={ML} y2={MT + plotH} stroke="var(--border)" strokeWidth={1} />
 
         {/* X axis */}
-        <rect x={0} y={MT + plotH} width="100%" height={MB + 2} fill="var(--bg)" />
+        <rect x={0} y={MT + plotH} width="100%" height={showScheduleLabels ? MB : MB + 2} fill="var(--bg)" />
         {w > 0 && xTicks.map(k => (
           <text key={k} x={kmToX(k)} y={MT + plotH + 17} textAnchor="middle"
             fill="var(--text-secondary)" fontSize={11}>{k}km</text>
         ))}
         <line x1={ML} y1={MT + plotH} x2={ML + plotW} y2={MT + plotH}
           stroke="var(--border)" strokeWidth={1} />
+
+        {/* Schedule strip — SVG elements sharing the same coordinate system */}
+        {showScheduleLabels && w > 0 && (
+          <>
+            <line x1={ML} y1={height} x2={ML + plotW} y2={height}
+              stroke="var(--border)" strokeWidth={1} />
+            {stripItems.map((item, i) => {
+              const x = kmToX(item.data.distM / 1000);
+              const row = stripRowAssignments[i] ?? 0;
+              const topY = STRIP_TICK_H + row * STRIP_ROW_H;
+              const baseY = height;
+              const isGel = item.kind === 'gel';
+              const col = isGel
+                ? '#ff9800'
+                : (item.data as CheckpointResult).type === 'aid'
+                  ? ((item.data as CheckpointResult).color || '#ffd54f')
+                  : '#8b8fa8';
+              const badgeR = isGel ? 5 : 8;
+              // Clamp badge so it stays inside chart x-bounds
+              const bx = Math.max(ML + badgeR + 2, Math.min(ML + plotW - badgeR - 2, x));
+
+              return (
+                <g key={`strip-${item.data.id}`}>
+                  <line x1={x} y1={baseY} x2={x} y2={baseY + topY}
+                    stroke={col} strokeWidth={1} strokeOpacity={0.38} />
+                  {isGel ? (
+                    <>
+                      <circle cx={bx} cy={baseY + topY + badgeR} r={badgeR} fill={col} />
+                      <text x={bx + badgeR + 4} y={baseY + topY + 9}
+                        fontSize={9} fill={col} fontWeight="600" fontFamily="Arial,sans-serif">
+                        {'Gel ' + (item.data as GelResult).gelNumber}
+                      </text>
+                      <text x={bx + badgeR + 4} y={baseY + topY + 23}
+                        fontSize={12} fill={col} fontWeight="700" fontFamily="Arial,sans-serif">
+                        {formatTime(item.data.etaMs)}
+                      </text>
+                    </>
+                  ) : (
+                    <>
+                      <circle cx={bx} cy={baseY + topY + badgeR} r={badgeR} fill={col} />
+                      <text x={bx} y={baseY + topY + badgeR + 4}
+                        textAnchor="middle" fontSize={9} fill="#000" fontWeight="800"
+                        fontFamily="Arial,sans-serif">
+                        {(item as { kind: 'cp'; cpIdx: number }).cpIdx}
+                      </text>
+                      <text x={bx + badgeR + 4} y={baseY + topY + 11}
+                        fontSize={9} fill="var(--text-secondary)" fontFamily="Arial,sans-serif">
+                        {(item.data.name ?? '').length > 12
+                          ? item.data.name.slice(0, 11) + '…'
+                          : item.data.name}
+                      </text>
+                      <text x={bx + badgeR + 4} y={baseY + topY + 26}
+                        fontSize={13} fill="var(--text)" fontWeight="700"
+                        fontFamily="Arial,sans-serif">
+                        {formatTime(item.data.etaMs)}
+                      </text>
+                      {(item.data as CheckpointResult).type === 'aid' &&
+                       (item.data as CheckpointResult).plannedStopMin > 0 && (
+                        <text x={bx + badgeR + 50} y={baseY + topY + 26}
+                          fontSize={9} fill="var(--text-hint)" fontFamily="Arial,sans-serif">
+                          {'+' + (item.data as CheckpointResult).plannedStopMin + 'm'}
+                        </text>
+                      )}
+                    </>
+                  )}
+                </g>
+              );
+            })}
+          </>
+        )}
 
         {/* Gel handles — rendered last so they're always on top */}
         {w > 0 && gelZones?.map(zone => {

@@ -92,3 +92,10 @@ export interface CalibrationResult {
   activityCount: number;
   distanceKm: number;
 }
+
+export interface GelResult {
+  id: string;
+  distM: number;
+  etaMs: number;
+  gelNumber: number;
+}

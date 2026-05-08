@@ -41,7 +41,7 @@ function fmtDur(ms: number): string {
   return `${m}m ${String(sec).padStart(2, '0')}s`;
 }
 
-function terrainColor(pct: number, alpha = 0.18): string {
+function terrainColor(pct: number, alpha = 0.12): string {
   if (pct > 0) return `rgba(244,67,54,${alpha})`;
   if (pct < 0) return `rgba(33,150,243,${alpha})`;
   return `rgba(140,143,168,${alpha})`;
@@ -68,6 +68,7 @@ export default function ElevationChart({
   const [gearPopup, setGearPopup] = useState<{
     id: string; clientX: number; clientY: number; inputVal: string;
   } | null>(null);
+  const [activeTerrainId, setActiveTerrainId] = useState<string | null>(null);
 
   useLayoutEffect(() => {
     if (containerRef.current) setW(containerRef.current.clientWidth);
@@ -154,6 +155,8 @@ export default function ElevationChart({
     if (e.button !== 0) return;
     // Close gear popup on any SVG click
     if (gearPopup) { setGearPopup(null); return; }
+    // Close active terrain stats on any SVG click
+    if (activeTerrainId) { setActiveTerrainId(null); return; }
     // Dismiss pending "+" without starting a new drag
     if (pending) { setPending(null); return; }
     const { x } = getSvgXY(e);
@@ -182,6 +185,27 @@ export default function ElevationChart({
     }
     dragRef.current = null;
   }
+
+  // Active terrain stats (click on % label)
+  const activeTerrain = activeTerrainId
+    ? terrainSegments?.find(t => t.id === activeTerrainId) ?? null
+    : null;
+  const activeTerrainStats = useMemo(() => {
+    if (!activeTerrain || !segments?.length) return null;
+    const fromM = activeTerrain.startKm * 1000, toM = activeTerrain.endKm * 1000;
+    let timeSec = 0, distM = 0;
+    for (const seg of segments) {
+      if (seg.endDist <= fromM || seg.startDist >= toM) continue;
+      const cover = Math.min(seg.endDist, toM) - Math.max(seg.startDist, fromM);
+      timeSec += (cover / 1000) * seg.targetPaceSecPerKm;
+      distM += cover;
+    }
+    if (distM === 0) return null;
+    return {
+      startKm: activeTerrain.startKm, endKm: activeTerrain.endKm,
+      distKm: distM / 1000, avgPace: timeSec / (distM / 1000), durationMs: timeSec * 1000,
+    };
+  }, [activeTerrain, segments]);
 
   // Selection stats
   const selStats = useMemo(() => {
@@ -342,32 +366,75 @@ export default function ElevationChart({
         </div>
       )}
 
-      {/* Terrain gear icons — positioned at start of each terrain region */}
+      {/* Selection "+" mark-segment button at top-left corner of selection */}
+      {selection && onMarkSelection && w > 0 && (
+        <div style={{
+          position: 'absolute',
+          left: Math.max(ML + 2, Math.min(ML + plotW - 30, kmToX(selection.startKm))),
+          top: MT + 2,
+          zIndex: 22, pointerEvents: 'auto',
+        }}>
+          <button
+            style={{
+              background: 'rgba(0,0,0,0.55)', color: '#fff', border: '1.5px solid transparent',
+              borderRadius: 3, fontSize: 14, padding: '0px 4px', cursor: 'pointer', fontWeight: 700,
+              lineHeight: 1.5, boxShadow: '0 1px 4px rgba(0,0,0,.35)',
+            }}
+            onMouseDown={e => e.stopPropagation()}
+            onMouseUp={e => e.stopPropagation()}
+            onClick={e => {
+              e.stopPropagation();
+              onMarkSelection(selection.startKm, selection.endKm);
+              setSelection(null);
+            }}
+          >+</button>
+        </div>
+      )}
+
+      {/* Terrain segment badges: [+X%] [⚙] */}
       {w > 0 && terrainSegments?.map(t => {
         const gx = kmToX(t.startKm);
         const pct = t.difficultyPercent;
         const col = terrainStroke(pct);
-        const label = `⚙ ${pct > 0 ? '+' : ''}${pct}%`;
+        const isActive = activeTerrainId === t.id;
         return (
           <div key={t.id} style={{
             position: 'absolute',
-            left: Math.max(ML + 2, Math.min(ML + plotW - 50, gx)),
+            left: Math.max(ML + 2, Math.min(ML + plotW - 70, gx)),
             top: MT + 2,
             zIndex: 22, pointerEvents: 'auto',
+            display: 'flex', gap: 3, alignItems: 'center',
           }}>
+            {/* % label — click to show stats */}
+            <button
+              style={{
+                background: isActive ? col : 'rgba(0,0,0,0.55)',
+                color: '#fff', border: isActive ? `1.5px solid ${col}` : '1.5px solid transparent',
+                borderRadius: 3, fontSize: 10, padding: '1px 5px', cursor: 'pointer', fontWeight: 700,
+                lineHeight: 1.6, boxShadow: '0 1px 4px rgba(0,0,0,.35)', whiteSpace: 'nowrap',
+              }}
+              onMouseDown={e => e.stopPropagation()}
+              onClick={e => {
+                e.stopPropagation();
+                setActiveTerrainId(prev => prev === t.id ? null : t.id);
+                setGearPopup(null);
+              }}
+            >{pct > 0 ? '+' : ''}{pct}%</button>
+            {/* Gear icon — click to open settings */}
             <button
               style={{
                 background: col, color: '#fff', border: 'none', borderRadius: 3,
-                fontSize: 9, padding: '1px 5px', cursor: 'pointer', fontWeight: 700,
-                lineHeight: 1.6, boxShadow: '0 1px 4px rgba(0,0,0,.35)', whiteSpace: 'nowrap',
+                fontSize: 14, padding: '0px 5px', cursor: 'pointer',
+                lineHeight: 1.5, boxShadow: '0 1px 4px rgba(0,0,0,.35)',
               }}
               onMouseDown={e => e.stopPropagation()}
               onClick={e => {
                 e.stopPropagation();
                 const rect = e.currentTarget.getBoundingClientRect();
                 setGearPopup({ id: t.id, clientX: rect.left, clientY: rect.bottom + 4, inputVal: String(pct) });
+                setActiveTerrainId(null);
               }}
-            >{label}</button>
+            >⚙</button>
           </div>
         );
       })}
@@ -388,28 +455,34 @@ export default function ElevationChart({
           <strong>{selStats.distKm.toFixed(1)} km</strong>
           <span>{formatPace(selStats.avgPace)}<span style={{ color: 'var(--text-hint)', marginLeft: 2 }}>/km avg</span></span>
           <span style={{ color: 'var(--yellow)', fontWeight: 600 }}>{fmtDur(selStats.durationMs)}</span>
-          {onMarkSelection && (
-            <button
-              style={{
-                padding: '2px 8px', background: 'var(--green)', color: '#000',
-                border: 'none', borderRadius: 4, fontSize: 11, fontWeight: 700,
-                cursor: 'pointer', pointerEvents: 'auto',
-              }}
-              onMouseDown={e => e.stopPropagation()}
-              onMouseUp={e => e.stopPropagation()}
-              onClick={e => {
-                e.stopPropagation();
-                onMarkSelection(selection.startKm, selection.endKm);
-                setSelection(null);
-              }}
-            >Mark segment</button>
-          )}
           <button
             style={{ padding: 0, background: 'none', border: 'none', color: 'var(--text-hint)', cursor: 'pointer', fontSize: 14, lineHeight: 1, flexShrink: 0, pointerEvents: 'auto' }}
             onMouseDown={e => e.stopPropagation()}
             onMouseUp={e => e.stopPropagation()}
             onClick={e => { e.stopPropagation(); setSelection(null); }}
           >×</button>
+        </div>
+      )}
+
+      {/* Active terrain stats bar */}
+      {activeTerrainId && activeTerrainStats && (
+        <div style={{
+          position: 'absolute', top: 8, left: '50%', transform: 'translateX(-50%)',
+          background: 'var(--bg-card)', border: `1px solid ${terrainStroke(activeTerrain!.difficultyPercent)}`,
+          borderRadius: 8, padding: '5px 10px', fontSize: 11, lineHeight: 1.6,
+          zIndex: 15, boxShadow: '0 2px 8px rgba(0,0,0,.4)',
+          display: 'flex', gap: 8, alignItems: 'center', whiteSpace: 'nowrap',
+          pointerEvents: 'none',
+        }}>
+          <span style={{ color: terrainStroke(activeTerrain!.difficultyPercent), fontWeight: 700 }}>
+            {activeTerrain!.difficultyPercent > 0 ? '+' : ''}{activeTerrain!.difficultyPercent}%
+          </span>
+          <span style={{ color: 'var(--text-secondary)' }}>
+            {activeTerrainStats.startKm.toFixed(1)}–{activeTerrainStats.endKm.toFixed(1)} km
+          </span>
+          <strong>{activeTerrainStats.distKm.toFixed(1)} km</strong>
+          <span>{formatPace(activeTerrainStats.avgPace)}<span style={{ color: 'var(--text-hint)', marginLeft: 2 }}>/km avg</span></span>
+          <span style={{ color: 'var(--yellow)', fontWeight: 600 }}>{fmtDur(activeTerrainStats.durationMs)}</span>
         </div>
       )}
 
@@ -435,7 +508,7 @@ export default function ElevationChart({
           >
             <div style={{ fontWeight: 600, color: 'var(--text)' }}>Terrain difficulty</div>
             <div style={{ color: 'var(--text-secondary)', fontSize: 11, lineHeight: 1.5 }}>
-              +% slower (rocks, mud) · −% faster (road)
+              +% — slower, -% — faster
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <input
@@ -455,7 +528,6 @@ export default function ElevationChart({
                 style={{ fontSize: 11, padding: '3px 6px', color: 'var(--red)', borderColor: 'var(--red)' }}
                 onClick={() => { onRemoveTerrain?.(gearPopup.id); setGearPopup(null); }}
               >Delete</button>
-              <button className="ghost" style={{ fontSize: 11, padding: '3px 6px' }} onClick={() => setGearPopup(null)}>✕</button>
             </div>
           </div>
         </>

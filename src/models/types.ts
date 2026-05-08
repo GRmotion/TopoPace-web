@@ -22,6 +22,7 @@ export interface Checkpoint {
   plannedStopMin: number; // 0 for waypoints
   cutoffTime?: string;    // "HH:MM" or undefined
   note?: string;
+  color?: string;         // custom dot color for aid stations
 }
 
 export interface PersonalProfile {

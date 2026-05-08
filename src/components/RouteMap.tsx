@@ -64,7 +64,7 @@ export default function RouteMap({ points, checkpoints, hoverDistM, onClickDist 
         radius: 7,
         color: '#000',
         weight: 2,
-        fillColor: isAid ? '#ffd54f' : '#8b8fa8',
+        fillColor: isAid ? (cp.color || '#ffd54f') : '#8b8fa8',
         fillOpacity: 1,
         pane: 'markerPane',
       }).bindTooltip(cp.name || `${(cp.distM / 1000).toFixed(1)} km`, { permanent: false });

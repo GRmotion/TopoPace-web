@@ -55,17 +55,31 @@ export function buildPlan(plan: RunPlan): TrackSegment[] {
   const runTimeSec = plan.goalTimeSec - totalStopSec;
 
   const rawSegs = buildRawSegments(plan.route, profile);
+  const mults = rawSegs.map(seg => terrainMult(terrain, seg.startDist, seg.endDist));
 
-  // Scale factor accounts for terrain: x * sum(rawPace * dist * terrainMult) = runTimeSec
-  const effectiveFlatEquiv = rawSegs.reduce((s, seg) => {
-    const tm = terrainMult(terrain, seg.startDist, seg.endDist);
-    return s + seg.targetPaceSecPerKm * (seg.endDist - seg.startDist) * tm;
+  // Base scale: ignore terrain so terrain zones get exactly ±X% relative to their no-terrain pace
+  const baseFlatEquiv = rawSegs.reduce((s, seg) =>
+    s + seg.targetPaceSecPerKm * (seg.endDist - seg.startDist), 0);
+  const basePaceScalePerM = baseFlatEquiv > 0 ? runTimeSec / baseFlatEquiv : 0;
+
+  // Time consumed by terrain-adjusted segments at their exact pace
+  const terrainTimeSec = rawSegs.reduce((s, seg, i) => {
+    const tm = mults[i];
+    if (tm === 1) return s;
+    return s + basePaceScalePerM * seg.targetPaceSecPerKm * (seg.endDist - seg.startDist) * tm;
   }, 0);
-  const baseSecPerM = runTimeSec / effectiveFlatEquiv;
 
-  return rawSegs.map(seg => {
-    const tm = terrainMult(terrain, seg.startDist, seg.endDist);
-    let pace = baseSecPerM * seg.targetPaceSecPerKm * 1000 * tm;
+  // Non-terrain segments absorb the remaining time budget
+  const nonTerrainFlatEquiv = rawSegs.reduce((s, seg, i) =>
+    mults[i] === 1 ? s + seg.targetPaceSecPerKm * (seg.endDist - seg.startDist) : s, 0);
+  const ntPaceScalePerM = nonTerrainFlatEquiv > 0
+    ? (runTimeSec - terrainTimeSec) / nonTerrainFlatEquiv
+    : basePaceScalePerM;
+
+  return rawSegs.map((seg, i) => {
+    const tm = mults[i];
+    const scalePerM = tm !== 1 ? basePaceScalePerM : ntPaceScalePerM;
+    let pace = scalePerM * seg.targetPaceSecPerKm * 1000 * tm;
     if (seg.gradePercent >= 8 && profile.maxClimbPaceSecPerKm) {
       pace = Math.max(pace, profile.maxClimbPaceSecPerKm);
     }

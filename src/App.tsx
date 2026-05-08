@@ -19,7 +19,16 @@ export default function App() {
   const [goalH, setGoalH] = useState(10);
   const [goalMin, setGoalMin] = useState(0);
   const [raceStartTime, setRaceStartTime] = useState('06:00');
-  const [calibrations, setCalibrations] = useState<CalibrationResult[]>([]);
+  const [calibrations, setCalibrations] = useState<CalibrationResult[]>(() => {
+    try {
+      const saved = localStorage.getItem('topopace_calibration');
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('topopace_calibration', JSON.stringify(calibrations));
+  }, [calibrations]);
   const [pendingDistM, setPendingDistM] = useState<number | null>(null);
   const [hoverDistM, setHoverDistM] = useState<number | null>(null);
   const [terrainSegs, setTerrainSegs] = useState<TerrainSegment[]>([]);
@@ -110,8 +119,8 @@ export default function App() {
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       <header style={{ background: 'var(--bg-card)', borderBottom: '1px solid var(--border)', padding: '12px 24px', display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 22 }}>🏔</span>
-          <span style={{ fontWeight: 700, fontSize: 18, letterSpacing: '0.04em', color: 'var(--green)' }}>TOPOPACE</span>
+          <img src="/logo_topopace.svg" width="28" height="28" alt="" style={{ flexShrink: 0 }} />
+          <span style={{ fontWeight: 700, fontSize: 18, letterSpacing: '0.04em', color: 'var(--green)' }}>TopoPace</span>
           <span style={{ color: 'var(--text-hint)', fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Race Planner</span>
         </div>
         {route && (
@@ -136,25 +145,31 @@ export default function App() {
           </div>
         ) : (
           <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
-            <aside style={{ width: 320, minWidth: 280, background: 'var(--bg-card)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 10, padding: 14, overflowY: 'auto', flexShrink: 0 }}>
-              <RouteUpload onRoute={handleRouteLoad} compact />
-              <GoalTimeForm
-                goalH={goalH} goalMin={goalMin}
-                raceStartTime={raceStartTime}
-                onChangeGoal={(h, m) => { setGoalH(h); setGoalMin(m); }}
-                onChangeStart={setRaceStartTime}
-              />
-              <CheckpointPanel
-                checkpoints={checkpoints}
-                totalDistM={route.totalDistM}
-                onChange={setCheckpoints}
-                pendingDistM={pendingDistM}
-                onPendingClear={() => setPendingDistM(null)}
-              />
-              <ActivityUpload existing={calibrations} onCalibrate={setCalibrations} onReset={() => setCalibrations([])} />
-              {canPrint && (
-                <PrintPlan plan={{ ...plan!, segments }} results={results as CheckpointResult[]} />
-              )}
+            <aside style={{ width: 320, minWidth: 280, background: 'var(--bg-card)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
+              {/* Scrollable top */}
+              <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, padding: 14 }}>
+                <RouteUpload onRoute={handleRouteLoad} compact />
+                <GoalTimeForm
+                  goalH={goalH} goalMin={goalMin}
+                  raceStartTime={raceStartTime}
+                  onChangeGoal={(h, m) => { setGoalH(h); setGoalMin(m); }}
+                  onChangeStart={setRaceStartTime}
+                />
+                <CheckpointPanel
+                  checkpoints={checkpoints}
+                  totalDistM={route.totalDistM}
+                  onChange={setCheckpoints}
+                  pendingDistM={pendingDistM}
+                  onPendingClear={() => setPendingDistM(null)}
+                />
+              </div>
+              {/* Fixed bottom */}
+              <div style={{ flexShrink: 0, borderTop: '1px solid var(--border)', padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <ActivityUpload existing={calibrations} onCalibrate={setCalibrations} onReset={() => setCalibrations([])} />
+                {canPrint && (
+                  <PrintPlan plan={{ ...plan!, segments }} results={results as CheckpointResult[]} />
+                )}
+              </div>
             </aside>
 
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>

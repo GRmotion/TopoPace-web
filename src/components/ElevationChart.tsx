@@ -285,7 +285,7 @@ export default function ElevationChart({
         {/* Checkpoint lines */}
         {checkpoints.map(cp => {
           const x = w > 0 ? kmToX(cp.distM / 1000) : 0;
-          const col = cp.type === 'aid' ? '#ffd54f' : '#8b8fa8';
+          const col = cp.type === 'aid' ? (cp.color || '#ffd54f') : '#8b8fa8';
           return (
             <g key={cp.id}>
               <line x1={x} y1={MT} x2={x} y2={MT + plotH} stroke={col} strokeWidth={1.5} clipPath="url(#pc)" />
@@ -442,7 +442,7 @@ export default function ElevationChart({
       {/* Selection stats bar */}
       {selection && selStats && (
         <div style={{
-          position: 'absolute', top: 8, left: '50%', transform: 'translateX(-50%)',
+          position: 'absolute', bottom: 8, left: '50%', transform: 'translateX(-50%)',
           background: 'var(--bg-card)', border: '1px solid var(--border)',
           borderRadius: 8, padding: '5px 10px', fontSize: 11, lineHeight: 1.6,
           zIndex: 15, boxShadow: '0 2px 8px rgba(0,0,0,.4)',
@@ -455,12 +455,6 @@ export default function ElevationChart({
           <strong>{selStats.distKm.toFixed(1)} km</strong>
           <span>{formatPace(selStats.avgPace)}<span style={{ color: 'var(--text-hint)', marginLeft: 2 }}>/km avg</span></span>
           <span style={{ color: 'var(--yellow)', fontWeight: 600 }}>{fmtDur(selStats.durationMs)}</span>
-          <button
-            style={{ padding: 0, background: 'none', border: 'none', color: 'var(--text-hint)', cursor: 'pointer', fontSize: 14, lineHeight: 1, flexShrink: 0, pointerEvents: 'auto' }}
-            onMouseDown={e => e.stopPropagation()}
-            onMouseUp={e => e.stopPropagation()}
-            onClick={e => { e.stopPropagation(); setSelection(null); }}
-          >×</button>
         </div>
       )}
 

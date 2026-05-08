@@ -308,14 +308,11 @@ export default function ElevationChart({
         {linePath && <path d={areaPath} fill="url(#eg)" clipPath="url(#pc)" />}
         {linePath && <path d={linePath} fill="none" stroke="#4caf50" strokeWidth={1.5} clipPath="url(#pc)" />}
 
-        {/* Gel zones — orange overlay on the elevation line + drag handle */}
+        {/* Gel zones — orange overlay on the elevation line (clip technique) */}
         {linePath && w > 0 && gelZones?.map(zone => {
           const x1 = kmToX(zone.centerKm - zone.widthKm / 2);
           const x2 = kmToX(zone.centerKm + zone.widthKm / 2);
           const clipId = `gel-clip-${zone.id}`;
-          const cx = kmToX(zone.centerKm);
-          const nearestPt = bs(data, zone.centerKm);
-          const cy = eleToY(nearestPt.ele);
           return (
             <g key={zone.id}>
               <defs>
@@ -325,12 +322,6 @@ export default function ElevationChart({
               </defs>
               <path d={linePath} fill="none" stroke="#ff9800" strokeWidth={3}
                 clipPath={`url(#${clipId})`} style={{ pointerEvents: 'none' }} />
-              <circle
-                cx={cx} cy={cy} r={5}
-                fill="#ff9800" stroke="#fff" strokeWidth={1.5}
-                style={{ cursor: 'ew-resize' }}
-                onMouseDown={e => { e.stopPropagation(); setDraggingGelId(zone.id); }}
-              />
             </g>
           );
         })}
@@ -361,6 +352,20 @@ export default function ElevationChart({
         ))}
         <line x1={ML} y1={MT + plotH} x2={ML + plotW} y2={MT + plotH}
           stroke="var(--border)" strokeWidth={1} />
+
+        {/* Gel handles — rendered last so they're always on top */}
+        {w > 0 && gelZones?.map(zone => {
+          const cx = kmToX(zone.centerKm);
+          const cy = eleToY(bs(data, zone.centerKm).ele);
+          return (
+            <circle key={`gh-${zone.id}`}
+              cx={cx} cy={cy} r={6}
+              fill="#ff9800" stroke="#fff" strokeWidth={2}
+              style={{ cursor: 'ew-resize' }}
+              onMouseDown={e => { e.stopPropagation(); setDraggingGelId(zone.id); }}
+            />
+          );
+        })}
       </svg>
 
       {/* Hover tooltip */}

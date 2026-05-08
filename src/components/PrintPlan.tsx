@@ -15,6 +15,7 @@ function generateHtml(plan: RunPlan, results: CheckpointResult[]): string {
   const goalH = Math.floor(plan.goalTimeSec / 3600);
   const goalMin = Math.floor((plan.goalTimeSec % 3600) / 60);
   const date = new Date().toLocaleDateString();
+  const hasCutoff = results.some(r => r.cutoffTime);
 
   const rows = results.map((r, i) => `
     <tr>
@@ -25,8 +26,8 @@ function generateHtml(plan: RunPlan, results: CheckpointResult[]): string {
       <td class="bold">${formatTime(r.etaMs)}</td>
       <td>${r.type === 'aid' ? `${r.plannedStopMin}min` : '—'}</td>
       <td class="bold">${formatTime(r.leaveAtMs)}</td>
-      <td>${r.cutoffTime ?? '—'}</td>
-      <td class="${r.cutoffBufferMin !== null && r.cutoffBufferMin < 10 ? 'red' : ''}">${bufferStr(r.cutoffBufferMin)}</td>
+      ${hasCutoff ? `<td>${r.cutoffTime ?? '—'}</td>` : ''}
+      ${hasCutoff ? `<td class="${r.cutoffBufferMin !== null && r.cutoffBufferMin < 10 ? 'red' : ''}">${bufferStr(r.cutoffBufferMin)}</td>` : ''}
     </tr>
   `).join('');
 
@@ -58,7 +59,7 @@ function generateHtml(plan: RunPlan, results: CheckpointResult[]): string {
     <thead>
       <tr>
         <th>#</th><th style="text-align:left">Checkpoint</th><th>km</th>
-        <th>Pace</th><th>ETA</th><th>Stop</th><th>Leave</th><th>Cutoff</th><th>Buffer</th>
+        <th>Pace</th><th>ETA</th><th>Stop</th><th>Leave</th>${hasCutoff ? '<th>Cutoff</th><th>Buffer</th>' : ''}
       </tr>
     </thead>
     <tbody>${rows}</tbody>

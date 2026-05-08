@@ -14,6 +14,7 @@ function bufferColor(min: number | null): string {
 }
 
 export default function PlanTable({ results, onAdjustStop }: Props) {
+  const hasCutoff = results.some(r => r.cutoffTime);
   return (
     <div className="card no-print" style={{ overflowX: 'auto' }}>
       <label style={{ display: 'block', marginBottom: 12 }}>Race Schedule</label>
@@ -27,8 +28,8 @@ export default function PlanTable({ results, onAdjustStop }: Props) {
             <th style={th}>ETA</th>
             <th style={th}>Stop</th>
             <th style={th}>Leave</th>
-            <th style={th}>Cutoff</th>
-            <th style={th}>Buffer</th>
+            {hasCutoff && <th style={th}>Cutoff</th>}
+            {hasCutoff && <th style={th}>Buffer</th>}
           </tr>
         </thead>
         <tbody>
@@ -59,14 +60,16 @@ export default function PlanTable({ results, onAdjustStop }: Props) {
                 ) : '—'}
               </td>
               <td style={{ ...td, fontWeight: 600 }}>{formatTime(r.leaveAtMs)}</td>
-              <td style={td}>{r.cutoffTime ?? '—'}</td>
-              <td style={td}>
-                {r.cutoffBufferMin !== null ? (
-                  <span style={{ color: bufferColor(r.cutoffBufferMin), fontWeight: 600 }}>
-                    {r.cutoffBufferMin >= 0 ? '+' : ''}{Math.round(r.cutoffBufferMin)}min
-                  </span>
-                ) : '—'}
-              </td>
+              {hasCutoff && <td style={td}>{r.cutoffTime ?? '—'}</td>}
+              {hasCutoff && (
+                <td style={td}>
+                  {r.cutoffBufferMin !== null ? (
+                    <span style={{ color: bufferColor(r.cutoffBufferMin), fontWeight: 600 }}>
+                      {r.cutoffBufferMin >= 0 ? '+' : ''}{Math.round(r.cutoffBufferMin)}min
+                    </span>
+                  ) : '—'}
+                </td>
+              )}
             </tr>
           ))}
         </tbody>

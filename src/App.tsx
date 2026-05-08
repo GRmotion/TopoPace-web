@@ -14,6 +14,7 @@ import ActivityUpload from './components/ActivityUpload';
 import PlanTable from './components/PlanTable';
 import PrintPlan from './components/PrintPlan';
 import AdvancedSettingsPanel from './components/AdvancedSettingsPanel';
+import GelAdvisorPanel from './components/GelAdvisorPanel';
 
 export default function App() {
   const [route, setRoute] = useState<ParsedRoute | null>(null);
@@ -185,6 +186,11 @@ export default function App() {
                   onChange={setCheckpoints}
                   pendingDistM={pendingDistM}
                   onPendingClear={() => setPendingDistM(null)}
+                />
+                <GelAdvisorPanel
+                  settings={advancedSettings}
+                  onChange={setAdvancedSettings}
+                  gelCount={gelZones.length}
                 />
               </div>
               {/* Fixed bottom */}

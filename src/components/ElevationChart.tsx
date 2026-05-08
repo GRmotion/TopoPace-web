@@ -1,7 +1,7 @@
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useState } from 'react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, ReferenceLine,
+  ResponsiveContainer, ReferenceLine, ReferenceArea,
 } from 'recharts';
 import type { TrackPoint, Checkpoint, TrackSegment } from '../models/types';
 import { paceAtDist, elapsedMsAtDist, formatTime, formatPace } from '../algorithm/PacePlanner';
@@ -41,8 +41,37 @@ function ChartTooltip({ active, payload, segments, checkpoints, raceStartTime }:
   );
 }
 
+function computeSegmentStats(segments: TrackSegment[], startKm: number, endKm: number) {
+  const fromM = startKm * 1000, toM = endKm * 1000;
+  let timeSec = 0, distM = 0;
+  for (const seg of segments) {
+    if (seg.endDist <= fromM || seg.startDist >= toM) continue;
+    const cover = Math.min(seg.endDist, toM) - Math.max(seg.startDist, fromM);
+    timeSec += (cover / 1000) * seg.targetPaceSecPerKm;
+    distM += cover;
+  }
+  return {
+    distKm: distM / 1000,
+    avgPace: distM > 0 ? timeSec / (distM / 1000) : null,
+    durationMs: distM > 0 ? timeSec * 1000 : null,
+  };
+}
+
+function formatDuration(ms: number): string {
+  const s = Math.round(ms / 1000);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m ${String(sec).padStart(2, '0')}s`;
+}
+
 export default function ElevationChart({ points, checkpoints, segments, raceStartTime, height = 200, onClickDist, onHoverDist }: Props) {
   const hoverDistRef = useRef<number | null>(null);
+  const dragRef = useRef<{ startDistM: number; startClientX: number } | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [selection, setSelection] = useState<{ startKm: number; endKm: number } | null>(null);
+  const [pendingClick, setPendingClick] = useState<{ distM: number; offsetX: number; offsetY: number } | null>(null);
 
   const data: DataPoint[] = points
     .filter((_, i) => i % Math.max(1, Math.floor(points.length / 600)) === 0)
@@ -52,31 +81,61 @@ export default function ElevationChart({ points, checkpoints, segments, raceStar
   const minEle = Math.min(...eleValues);
   const maxEle = Math.max(...eleValues);
 
-  // Track hovered distance via Recharts events — store in ref (avoids re-render on every pixel)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleMouseMove = useCallback((state: any) => {
     const distKm = state?.activePayload?.[0]?.payload?.distKm;
     const distM = distKm != null ? distKm * 1000 : null;
     hoverDistRef.current = distM;
     onHoverDist?.(distM);
+
+    if (dragRef.current !== null && distKm != null) {
+      const startKm = dragRef.current.startDistM / 1000;
+      setSelection({ startKm: Math.min(startKm, distKm), endKm: Math.max(startKm, distKm) });
+    }
   }, [onHoverDist]);
 
   const handleMouseLeave = useCallback(() => {
-    hoverDistRef.current = null;
-    onHoverDist?.(null);
+    if (!dragRef.current) {
+      hoverDistRef.current = null;
+      onHoverDist?.(null);
+    }
   }, [onHoverDist]);
 
-  // Click handled on the wrapper div using last known hover position (avoids Recharts click quirks)
-  const handleWrapperClick = useCallback(() => {
-    if (hoverDistRef.current != null && onClickDist) {
-      onClickDist(hoverDistRef.current);
+  function handleWrapperMouseDown(e: React.MouseEvent) {
+    if (e.button !== 0 || hoverDistRef.current == null) return;
+    setPendingClick(null);
+    setSelection(null);
+    dragRef.current = { startDistM: hoverDistRef.current, startClientX: e.clientX };
+  }
+
+  function handleWrapperMouseUp(e: React.MouseEvent) {
+    if (!dragRef.current) return;
+    const dx = Math.abs(e.clientX - dragRef.current.startClientX);
+    if (dx <= 5 && onClickDist) {
+      setSelection(null);
+      const rect = containerRef.current?.getBoundingClientRect();
+      const w = containerRef.current?.clientWidth ?? 0;
+      const h2 = containerRef.current?.clientHeight ?? 0;
+      const rawX = rect ? e.clientX - rect.left : 0;
+      const rawY = rect ? e.clientY - rect.top : 0;
+      setPendingClick({
+        distM: dragRef.current.startDistM,
+        offsetX: Math.max(50, Math.min(w - 20, rawX)),
+        offsetY: Math.max(20, Math.min(h2 - 20, rawY)),
+      });
     }
-  }, [onClickDist]);
+    dragRef.current = null;
+  }
+
+  const selectionStats = selection && segments?.length
+    ? computeSegmentStats(segments, selection.startKm, selection.endKm) : null;
 
   return (
     <div
-      style={{ width: '100%', height, cursor: onClickDist ? 'crosshair' : 'default' }}
-      onClick={handleWrapperClick}
+      ref={containerRef}
+      style={{ width: '100%', height, cursor: onClickDist ? 'crosshair' : 'default', position: 'relative', userSelect: 'none' }}
+      onMouseDown={handleWrapperMouseDown}
+      onMouseUp={handleWrapperMouseUp}
     >
       <ResponsiveContainer>
         <AreaChart
@@ -120,6 +179,15 @@ export default function ElevationChart({ points, checkpoints, segments, raceStar
               label={{ value: cp.name, position: 'insideTopRight', fill: cp.type === 'aid' ? '#ffd54f' : '#8b8fa8', fontSize: 10 }}
             />
           ))}
+          {selection && (
+            <ReferenceArea
+              x1={selection.startKm}
+              x2={selection.endKm}
+              fill="rgba(255,255,255,0.08)"
+              stroke="rgba(255,255,255,0.25)"
+              strokeWidth={1}
+            />
+          )}
           <Area
             type="monotone"
             dataKey="ele"
@@ -132,6 +200,57 @@ export default function ElevationChart({ points, checkpoints, segments, raceStar
           />
         </AreaChart>
       </ResponsiveContainer>
+
+      {/* Two-step checkpoint add: "+" button appears at click position */}
+      {pendingClick && onClickDist && (
+        <div style={{ position: 'absolute', top: pendingClick.offsetY, left: pendingClick.offsetX, transform: 'translate(-50%, -50%)', zIndex: 20, pointerEvents: 'none' }}>
+          <button
+            style={{
+              width: 30, height: 30, borderRadius: '50%',
+              background: '#4caf50', color: '#fff',
+              border: '2px solid rgba(255,255,255,0.9)',
+              fontSize: 20, fontWeight: 700, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: 0, boxShadow: '0 2px 8px rgba(0,0,0,.55)',
+              lineHeight: 1, pointerEvents: 'auto',
+            }}
+            onMouseDown={e => e.stopPropagation()}
+            onMouseUp={e => e.stopPropagation()}
+            onClick={e => {
+              e.stopPropagation();
+              onClickDist(pendingClick.distM);
+              setPendingClick(null);
+            }}
+          >+</button>
+        </div>
+      )}
+
+      {/* Selection range stats */}
+      {selection && selectionStats && (
+        <div style={{
+          position: 'absolute', top: 8, left: '50%', transform: 'translateX(-50%)',
+          background: 'var(--bg-card)', border: '1px solid var(--border)',
+          borderRadius: 8, padding: '5px 10px', fontSize: 11, lineHeight: 1.6,
+          zIndex: 15, boxShadow: '0 2px 8px rgba(0,0,0,.4)',
+          display: 'flex', gap: 10, alignItems: 'center', whiteSpace: 'nowrap',
+          pointerEvents: 'none',
+        }}>
+          <span style={{ color: 'var(--text-secondary)' }}>{selection.startKm.toFixed(1)}–{selection.endKm.toFixed(1)} km</span>
+          <strong>{selectionStats.distKm.toFixed(1)} km</strong>
+          {selectionStats.avgPace && (
+            <span>{formatPace(selectionStats.avgPace)}<span style={{ color: 'var(--text-hint)', marginLeft: 2 }}>/km avg</span></span>
+          )}
+          {selectionStats.durationMs && (
+            <span style={{ color: 'var(--yellow)', fontWeight: 600 }}>{formatDuration(selectionStats.durationMs)}</span>
+          )}
+          <button
+            style={{ padding: 0, background: 'none', border: 'none', color: 'var(--text-hint)', cursor: 'pointer', fontSize: 14, lineHeight: 1, flexShrink: 0, pointerEvents: 'auto' }}
+            onMouseDown={e => e.stopPropagation()}
+            onMouseUp={e => e.stopPropagation()}
+            onClick={e => { e.stopPropagation(); setSelection(null); }}
+          >×</button>
+        </div>
+      )}
     </div>
   );
 }

@@ -130,9 +130,13 @@ function CheckpointEditor({ cp: initial, totalDistM, onSave, onCancel }: EditorP
       {cp.type === 'aid' && (
         <div style={{ display: 'flex', gap: 12 }}>
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <label>Planned stop (min)</label>
-            <input type="number" min={0} max={120} value={cp.plannedStopMin}
-              onChange={e => set('plannedStopMin', parseInt(e.target.value) || 0)} />
+            <label>Planned stop</label>
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <input type="number" min={0} max={120} value={cp.plannedStopMin}
+                onChange={e => set('plannedStopMin', parseInt(e.target.value) || 0)}
+                style={{ paddingRight: 38, width: '100%' }} />
+              <span style={{ position: 'absolute', right: 10, color: 'var(--text-hint)', fontSize: 11, pointerEvents: 'none' }}>MIN</span>
+            </div>
           </div>
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
             <label>Cutoff time</label>

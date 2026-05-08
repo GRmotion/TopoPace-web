@@ -8,6 +8,7 @@ import { formatPace } from '../algorithm/PacePlanner';
 interface Props {
   existing: CalibrationResult[];
   onCalibrate: (results: CalibrationResult[]) => void;
+  onReset?: () => void;
 }
 
 function InfoPopup({ result }: { result: CalibrationResult }) {
@@ -50,7 +51,7 @@ function Row({ label, value, hint }: { label: string; value: string; hint?: stri
   );
 }
 
-export default function ActivityUpload({ existing, onCalibrate }: Props) {
+export default function ActivityUpload({ existing, onCalibrate, onReset }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<'idle' | 'processing' | 'done' | 'error'>('idle');
   const [error, setError] = useState('');
@@ -85,16 +86,28 @@ export default function ActivityUpload({ existing, onCalibrate }: Props) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <label>Personal Calibration</label>
         {last && (
-          <div style={{ position: 'relative' }}>
-            <button
-              className="ghost"
-              style={{ width: 24, height: 24, padding: 0, fontSize: 13, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-              onClick={() => setShowInfo(v => !v)}
-              onBlur={() => setTimeout(() => setShowInfo(false), 150)}
-            >
-              ℹ
-            </button>
-            {showInfo && <InfoPopup result={last} />}
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+            <div style={{ position: 'relative' }}>
+              <button
+                className="ghost"
+                style={{ width: 24, height: 24, padding: 0, fontSize: 13, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                onClick={() => setShowInfo(v => !v)}
+                onBlur={() => setTimeout(() => setShowInfo(false), 150)}
+              >
+                ℹ
+              </button>
+              {showInfo && <InfoPopup result={last} />}
+            </div>
+            {onReset && (
+              <button
+                className="ghost"
+                style={{ width: 24, height: 24, padding: 0, fontSize: 14, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-hint)' }}
+                onClick={() => { if (window.confirm('Reset calibration data?')) { onReset(); setStatus('idle'); } }}
+                title="Reset calibration"
+              >
+                ↺
+              </button>
+            )}
           </div>
         )}
       </div>

@@ -13,7 +13,7 @@ export default function RouteMap({ points, checkpoints, hoverDistM, onClickDist 
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const routeLayerRef = useRef<L.Polyline | null>(null);
-  const markersRef = useRef<L.Marker[]>([]);
+  const markersRef = useRef<L.Layer[]>([]);
   const hoverMarkerRef = useRef<L.CircleMarker | null>(null);
   const [addMode, setAddMode] = useState(false);
   const addModeRef = useRef(false);
@@ -26,18 +26,10 @@ export default function RouteMap({ points, checkpoints, hoverDistM, onClickDist 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors',
     }).addTo(mapRef.current);
-
-    mapRef.current.on('click', (e: L.LeafletMouseEvent) => {
-      if (!addModeRef.current || !onClickDist) return;
-      const nearest = findNearest(points, e.latlng.lat, e.latlng.lng);
-      if (nearest) onClickDist(nearest.distFromStart);
-    });
-
     return () => { mapRef.current?.remove(); mapRef.current = null; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Update map click handler when points or callback change
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -68,14 +60,15 @@ export default function RouteMap({ points, checkpoints, hoverDistM, onClickDist 
       const pt = findClosestByDist(points, cp.distM);
       if (!pt) return;
       const isAid = cp.type === 'aid';
-      const icon = L.divIcon({
-        className: '',
-        html: `<div style="width:12px;height:12px;border-radius:50%;background:${isAid ? '#ffd54f' : '#8b8fa8'};border:2px solid #000;box-shadow:0 0 4px rgba(0,0,0,.5)"></div>`,
-        iconAnchor: [6, 6],
-      });
-      markersRef.current.push(
-        L.marker([pt.lat, pt.lon], { icon }).bindTooltip(`${cp.name}`, { permanent: false }).addTo(map)
-      );
+      const marker = L.circleMarker([pt.lat, pt.lon] as L.LatLngTuple, {
+        radius: 7,
+        color: '#000',
+        weight: 2,
+        fillColor: isAid ? '#ffd54f' : '#8b8fa8',
+        fillOpacity: 1,
+        pane: 'markerPane',
+      }).bindTooltip(cp.name || `${(cp.distM / 1000).toFixed(1)} km`, { permanent: false });
+      markersRef.current.push(marker.addTo(map));
     });
   }, [points, checkpoints]);
 

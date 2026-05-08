@@ -138,7 +138,7 @@ export default function App() {
                 onPendingClear={() => setPendingDistM(null)}
               />
 
-              <ActivityUpload existing={calibrations} onCalibrate={setCalibrations} />
+              <ActivityUpload existing={calibrations} onCalibrate={setCalibrations} onReset={() => setCalibrations([])} />
 
               {canPrint && (
                 <PrintPlan plan={{ ...plan!, segments }} results={results as CheckpointResult[]} />

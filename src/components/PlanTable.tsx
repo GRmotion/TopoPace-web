@@ -36,7 +36,11 @@ export default function PlanTable({ results, onAdjustStop }: Props) {
             <tr key={r.id} style={{ borderTop: '1px solid var(--border)' }}>
               <td style={{ ...td, color: 'var(--text-hint)' }}>{i + 1}</td>
               <td style={{ ...td, textAlign: 'left' }}>
-                <span style={{ marginRight: 6 }}>{r.type === 'aid' ? '🟡' : '📍'}</span>
+                {r.type === 'aid' ? (
+                  <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: r.color || '#ffd54f', boxShadow: '0 0 0 1px rgba(0,0,0,0.3)', marginRight: 6, flexShrink: 0, verticalAlign: 'middle' }} />
+                ) : (
+                  <span style={{ marginRight: 6 }}>📍</span>
+                )}
                 <span style={{ fontWeight: 600 }}>{r.name}</span>
                 {r.note && <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>{r.note}</div>}
               </td>

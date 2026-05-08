@@ -461,7 +461,7 @@ export default function ElevationChart({
       {/* Active terrain stats bar */}
       {activeTerrainId && activeTerrainStats && (
         <div style={{
-          position: 'absolute', top: 8, left: '50%', transform: 'translateX(-50%)',
+          position: 'absolute', bottom: 8, left: '50%', transform: 'translateX(-50%)',
           background: 'var(--bg-card)', border: `1px solid ${terrainStroke(activeTerrain!.difficultyPercent)}`,
           borderRadius: 8, padding: '5px 10px', fontSize: 11, lineHeight: 1.6,
           zIndex: 15, boxShadow: '0 2px 8px rgba(0,0,0,.4)',

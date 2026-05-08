@@ -17,7 +17,7 @@ function interpolateEle(points: TrackPoint[], distM: number): number {
   return p0.ele + t * (p1.ele - p0.ele);
 }
 
-function buildRawSegments(points: TrackPoint[], profile: typeof DEFAULT_PROFILE): TrackSegment[] {
+function buildRawSegments(points: TrackPoint[], profile: typeof DEFAULT_PROFILE, aggressiveness = 0): TrackSegment[] {
   const totalDistM = points[points.length - 1].distFromStart;
   const segments: TrackSegment[] = [];
   let segStart = 0;
@@ -27,7 +27,9 @@ function buildRawSegments(points: TrackPoint[], profile: typeof DEFAULT_PROFILE)
     const eleEnd = interpolateEle(points, segEnd);
     const horizDist = segEnd - segStart;
     const grade = horizDist > 0 ? (eleEnd - eleStart) / horizDist : 0;
-    const fatigueRamp = 1 + profile.fatigueRatePerHundredKm * (segStart / totalDistM);
+    const t = segStart / totalDistM;
+    const aggrFactor = aggressiveness !== 0 ? 1 + aggressiveness * (1 - 2 * t) : 1;
+    const fatigueRamp = (1 + profile.fatigueRatePerHundredKm * t) * aggrFactor;
     segments.push({
       startDist: segStart,
       endDist: segEnd,
@@ -54,7 +56,8 @@ export function buildPlan(plan: RunPlan): TrackSegment[] {
   const totalStopSec = plan.checkpoints.reduce((sum, cp) => sum + cp.plannedStopMin * 60, 0);
   const runTimeSec = plan.goalTimeSec - totalStopSec;
 
-  const rawSegs = buildRawSegments(plan.route, profile);
+  const aggressiveness = plan.advancedSettings?.startAggressiveness ?? 0;
+  const rawSegs = buildRawSegments(plan.route, profile, aggressiveness);
   const mults = rawSegs.map(seg => terrainMult(terrain, seg.startDist, seg.endDist));
 
   // Base scale: ignore terrain so terrain zones get exactly ±X% relative to their no-terrain pace

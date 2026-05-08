@@ -1,5 +1,5 @@
 import { useRef, useState, useLayoutEffect, useEffect, useMemo } from 'react';
-import type { TrackPoint, Checkpoint, TrackSegment, TerrainSegment } from '../models/types';
+import type { TrackPoint, Checkpoint, TrackSegment, TerrainSegment, GelZone } from '../models/types';
 import { paceAtDist, elapsedMsAtDist, formatTime, formatPace } from '../algorithm/PacePlanner';
 
 const ML = 50, MR = 14, MT = 10, MB = 28;
@@ -16,6 +16,8 @@ interface Props {
   onMarkSelection?: (startKm: number, endKm: number) => void;
   onUpdateTerrain?: (id: string, difficultyPercent: number) => void;
   onRemoveTerrain?: (id: string) => void;
+  gelZones?: GelZone[];
+  onGelZonesChange?: (zones: GelZone[]) => void;
 }
 
 interface DPt { km: number; ele: number; }
@@ -54,7 +56,7 @@ function terrainStroke(pct: number): string {
 
 export default function ElevationChart({
   points, checkpoints, segments, raceStartTime, height = 200,
-  terrainSegments, onClickDist, onHoverDist,
+  terrainSegments, gelZones, onGelZonesChange, onClickDist, onHoverDist,
   onMarkSelection, onUpdateTerrain, onRemoveTerrain,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -69,6 +71,7 @@ export default function ElevationChart({
     id: string; clientX: number; clientY: number; inputVal: string;
   } | null>(null);
   const [activeTerrainId, setActiveTerrainId] = useState<string | null>(null);
+  const [draggingGelId, setDraggingGelId] = useState<string | null>(null);
 
   useLayoutEffect(() => {
     if (containerRef.current) setW(containerRef.current.clientWidth);
@@ -134,12 +137,17 @@ export default function ElevationChart({
     const { x } = getSvgXY(e);
     const km = svgXToKm(x);
     if (km == null) {
-      if (!dragRef.current) { setHover(null); onHoverDist?.(null); }
+      if (!dragRef.current && !draggingGelId) { setHover(null); onHoverDist?.(null); }
       return;
     }
     const nearest = bs(data, km);
     setHover({ km, ele: nearest.ele });
     onHoverDist?.(km * 1000);
+    if (draggingGelId && onGelZonesChange && gelZones) {
+      const clamped = Math.max(data[0].km, Math.min(data[data.length - 1].km, km));
+      onGelZonesChange(gelZones.map(z => z.id === draggingGelId ? { ...z, centerKm: clamped } : z));
+      return;
+    }
     if (dragRef.current) {
       const a = Math.min(dragRef.current.startKm, km);
       const b = Math.max(dragRef.current.startKm, km);
@@ -148,7 +156,8 @@ export default function ElevationChart({
   }
 
   function onLeave() {
-    if (!dragRef.current) { setHover(null); onHoverDist?.(null); }
+    if (!dragRef.current && !draggingGelId) { setHover(null); onHoverDist?.(null); }
+    if (draggingGelId) setDraggingGelId(null);
   }
 
   function onDown(e: React.MouseEvent<SVGSVGElement>) {
@@ -168,6 +177,7 @@ export default function ElevationChart({
   }
 
   function onUp(e: React.MouseEvent<SVGSVGElement>) {
+    if (draggingGelId) { setDraggingGelId(null); return; }
     if (!dragRef.current) return;
     const dx = Math.abs(e.clientX - dragRef.current.startClientX);
     if (dx <= 5 && onClickDist) {
@@ -297,6 +307,33 @@ export default function ElevationChart({
         {/* Elevation area + line */}
         {linePath && <path d={areaPath} fill="url(#eg)" clipPath="url(#pc)" />}
         {linePath && <path d={linePath} fill="none" stroke="#4caf50" strokeWidth={1.5} clipPath="url(#pc)" />}
+
+        {/* Gel zones — orange overlay on the elevation line + drag handle */}
+        {linePath && w > 0 && gelZones?.map(zone => {
+          const x1 = kmToX(zone.centerKm - zone.widthKm / 2);
+          const x2 = kmToX(zone.centerKm + zone.widthKm / 2);
+          const clipId = `gel-clip-${zone.id}`;
+          const cx = kmToX(zone.centerKm);
+          const nearestPt = bs(data, zone.centerKm);
+          const cy = eleToY(nearestPt.ele);
+          return (
+            <g key={zone.id}>
+              <defs>
+                <clipPath id={clipId}>
+                  <rect x={x1} y={MT} width={Math.max(0, x2 - x1)} height={plotH} />
+                </clipPath>
+              </defs>
+              <path d={linePath} fill="none" stroke="#ff9800" strokeWidth={3}
+                clipPath={`url(#${clipId})`} style={{ pointerEvents: 'none' }} />
+              <circle
+                cx={cx} cy={cy} r={5}
+                fill="#ff9800" stroke="#fff" strokeWidth={1.5}
+                style={{ cursor: 'ew-resize' }}
+                onMouseDown={e => { e.stopPropagation(); setDraggingGelId(zone.id); }}
+              />
+            </g>
+          );
+        })}
 
         {/* Hover hairline + dot */}
         {hover && w > 0 && (

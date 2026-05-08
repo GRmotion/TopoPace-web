@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import type { Checkpoint, RunPlan, PersonalProfile, CalibrationResult, CheckpointResult, TerrainSegment } from './models/types';
-import { DEFAULT_PROFILE } from './models/types';
+import type { Checkpoint, RunPlan, PersonalProfile, CalibrationResult, CheckpointResult, TerrainSegment, GelZone, AdvancedSettings } from './models/types';
+import { DEFAULT_PROFILE, DEFAULT_ADVANCED } from './models/types';
+import { computeGelZones } from './algorithm/GelAdvisor';
 import type { ParsedRoute } from './parsers/GpxParser';
 import { buildPlan, computeScheduleFull } from './algorithm/PacePlanner';
 
@@ -12,6 +13,7 @@ import GoalTimeForm from './components/GoalTimeForm';
 import ActivityUpload from './components/ActivityUpload';
 import PlanTable from './components/PlanTable';
 import PrintPlan from './components/PrintPlan';
+import AdvancedSettingsPanel from './components/AdvancedSettingsPanel';
 
 export default function App() {
   const [route, setRoute] = useState<ParsedRoute | null>(null);
@@ -29,6 +31,16 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('topopace_calibration', JSON.stringify(calibrations));
   }, [calibrations]);
+  const [advancedSettings, setAdvancedSettings] = useState<AdvancedSettings>(() => {
+    try { return JSON.parse(localStorage.getItem('topopace_advanced') ?? 'null') ?? DEFAULT_ADVANCED; }
+    catch { return DEFAULT_ADVANCED; }
+  });
+  useEffect(() => {
+    localStorage.setItem('topopace_advanced', JSON.stringify(advancedSettings));
+  }, [advancedSettings]);
+
+  const [gelZones, setGelZones] = useState<GelZone[]>([]);
+
   const [pendingDistM, setPendingDistM] = useState<number | null>(null);
   const [hoverDistM, setHoverDistM] = useState<number | null>(null);
   const [terrainSegs, setTerrainSegs] = useState<TerrainSegment[]>([]);
@@ -67,8 +79,9 @@ export default function App() {
       raceStartTime,
       createdAt: Date.now(),
       terrainSegments: terrainSegs,
+      advancedSettings,
     };
-  }, [route, checkpoints, profile, goalH, goalMin, raceStartTime, terrainSegs]);
+  }, [route, checkpoints, profile, goalH, goalMin, raceStartTime, terrainSegs, advancedSettings]);
 
   const { segments, results } = useMemo(() => {
     if (!plan || plan.route.length < 2 || plan.goalTimeSec <= 0) return { segments: [], results: [] };
@@ -80,6 +93,17 @@ export default function App() {
       return { segments: [], results: [] };
     }
   }, [plan]);
+
+  useEffect(() => {
+    if (!advancedSettings.gelEnabled || segments.length === 0 || !route) {
+      setGelZones([]);
+      return;
+    }
+    setGelZones(computeGelZones(segments, checkpoints, terrainSegs, advancedSettings, route.totalDistM));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [advancedSettings.gelEnabled, advancedSettings.gelIntervalMin, segments, checkpoints, terrainSegs]);
+
+  const handleGelZonesChange = useCallback((zones: GelZone[]) => setGelZones(zones), []);
 
   const handleRouteLoad = useCallback((parsed: ParsedRoute) => {
     setRoute(parsed);
@@ -165,6 +189,7 @@ export default function App() {
               </div>
               {/* Fixed bottom */}
               <div style={{ flexShrink: 0, borderTop: '1px solid var(--border)', padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <AdvancedSettingsPanel settings={advancedSettings} onChange={setAdvancedSettings} />
                 <ActivityUpload existing={calibrations} onCalibrate={setCalibrations} onReset={() => setCalibrations([])} />
                 {canPrint && (
                   <PrintPlan plan={{ ...plan!, segments }} results={results as CheckpointResult[]} />
@@ -204,6 +229,8 @@ export default function App() {
                     raceStartTime={plan?.raceStartTime}
                     height={chartHeight}
                     terrainSegments={terrainSegs}
+                    gelZones={gelZones}
+                    onGelZonesChange={handleGelZonesChange}
                     onClickDist={distM => setPendingDistM(distM)}
                     onHoverDist={setHoverDistM}
                     onMarkSelection={handleMarkSelection}

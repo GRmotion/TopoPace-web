@@ -33,8 +33,10 @@ export default function App() {
     localStorage.setItem('topopace_calibration', JSON.stringify(calibrations));
   }, [calibrations]);
   const [advancedSettings, setAdvancedSettings] = useState<AdvancedSettings>(() => {
-    try { return JSON.parse(localStorage.getItem('topopace_advanced') ?? 'null') ?? DEFAULT_ADVANCED; }
-    catch { return DEFAULT_ADVANCED; }
+    try {
+      const saved = JSON.parse(localStorage.getItem('topopace_advanced') ?? 'null');
+      return saved ? { ...DEFAULT_ADVANCED, ...saved } : DEFAULT_ADVANCED;
+    } catch { return DEFAULT_ADVANCED; }
   });
   useEffect(() => {
     localStorage.setItem('topopace_advanced', JSON.stringify(advancedSettings));
@@ -217,7 +219,7 @@ export default function App() {
                 <AdvancedSettingsPanel settings={advancedSettings} onChange={setAdvancedSettings} />
                 <ActivityUpload existing={calibrations} onCalibrate={setCalibrations} onReset={() => setCalibrations([])} />
                 {canPrint && (
-                  <PrintPlan plan={{ ...plan!, segments }} results={results as CheckpointResult[]} />
+                  <PrintPlan plan={{ ...plan!, segments }} results={results as CheckpointResult[]} gelResults={advancedSettings.gelInSchedule ? gelResults : []} />
                 )}
               </div>
             </aside>
@@ -278,7 +280,7 @@ export default function App() {
                       <div style={{ width: 32, height: 2, background: 'var(--border)', borderRadius: 2 }} />
                     </div>
                     <div style={{ height: tableHeight, overflow: 'auto', padding: '0 16px 16px' }}>
-                      <PlanTable results={results as CheckpointResult[]} gelResults={gelResults} onAdjustStop={handleAdjustStop} />
+                      <PlanTable results={results as CheckpointResult[]} gelResults={advancedSettings.gelInSchedule ? gelResults : []} onAdjustStop={handleAdjustStop} />
                     </div>
                   </>
                 )}

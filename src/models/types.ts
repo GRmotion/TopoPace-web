@@ -56,12 +56,14 @@ export interface AdvancedSettings {
   startAggressiveness: number; // -0.20 to +0.20 (negative = conservative/negative split)
   gelEnabled: boolean;
   gelIntervalMin: number;
+  gelInSchedule: boolean;     // show gel zones in race schedule + print
 }
 
 export const DEFAULT_ADVANCED: AdvancedSettings = {
   startAggressiveness: 0,
   gelEnabled: false,
   gelIntervalMin: 40,
+  gelInSchedule: true,
 };
 
 export interface RunPlan {

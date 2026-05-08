@@ -1,9 +1,12 @@
 import type { CheckpointResult, RunPlan } from '../models/types';
 import { formatTime, formatPace } from '../algorithm/PacePlanner';
 
+interface GelResult { id: string; distM: number; etaMs: number; gelNumber: number; }
+
 interface Props {
   plan: RunPlan;
   results: CheckpointResult[];
+  gelResults?: GelResult[];
 }
 
 function bufferStr(min: number | null): string {
@@ -11,15 +14,37 @@ function bufferStr(min: number | null): string {
   return `${min >= 0 ? '+' : ''}${Math.round(min)}min`;
 }
 
-function generateHtml(plan: RunPlan, results: CheckpointResult[]): string {
+function generateHtml(plan: RunPlan, results: CheckpointResult[], gelResults: GelResult[]): string {
   const goalH = Math.floor(plan.goalTimeSec / 3600);
   const goalMin = Math.floor((plan.goalTimeSec % 3600) / 60);
   const date = new Date().toLocaleDateString();
   const hasCutoff = results.some(r => r.cutoffTime);
 
-  const rows = results.map((r, i) => `
-    <tr>
-      <td>${i + 1}</td>
+  type Row = { kind: 'cp'; data: CheckpointResult } | { kind: 'gel'; data: GelResult };
+  const allRows: Row[] = [
+    ...results.map(r => ({ kind: 'cp' as const, data: r })),
+    ...gelResults.map(g => ({ kind: 'gel' as const, data: g })),
+  ].sort((a, b) => a.data.distM - b.data.distM);
+
+  let cpIdx = 0;
+  const rows = allRows.map(row => {
+    if (row.kind === 'gel') {
+      const g = row.data;
+      return `<tr class="gel">
+        <td>·</td>
+        <td class="name" style="color:#e67e00">Gel ${g.gelNumber}</td>
+        <td>${(g.distM / 1000).toFixed(1)}</td>
+        <td>—</td>
+        <td class="bold">${formatTime(g.etaMs)}</td>
+        <td>—</td>
+        <td class="bold">${formatTime(g.etaMs)}</td>
+        ${hasCutoff ? '<td>—</td><td>—</td>' : ''}
+      </tr>`;
+    }
+    const r = row.data;
+    cpIdx++;
+    return `<tr>
+      <td>${cpIdx}</td>
       <td class="name">${r.name}${r.note ? `<div class="note">${r.note}</div>` : ''}</td>
       <td>${(r.distM / 1000).toFixed(1)}</td>
       <td>${formatPace(r.segmentPaceSecPerKm)}</td>
@@ -28,8 +53,8 @@ function generateHtml(plan: RunPlan, results: CheckpointResult[]): string {
       <td class="bold">${formatTime(r.leaveAtMs)}</td>
       ${hasCutoff ? `<td>${r.cutoffTime ?? '—'}</td>` : ''}
       ${hasCutoff ? `<td class="${r.cutoffBufferMin !== null && r.cutoffBufferMin < 10 ? 'red' : ''}">${bufferStr(r.cutoffBufferMin)}</td>` : ''}
-    </tr>
-  `).join('');
+    </tr>`;
+  }).join('');
 
   return `<!DOCTYPE html>
 <html>
@@ -48,6 +73,7 @@ function generateHtml(plan: RunPlan, results: CheckpointResult[]): string {
     .note { font-size: 7.5pt; font-weight: 400; color: #555; margin-top: 1px; }
     .bold { font-weight: 700; }
     .red { color: #c00; font-weight: 700; }
+    tr.gel td { color: #e67e00; border-bottom-style: dashed; }
     footer { margin-top: 5mm; font-size: 7.5pt; color: #777; }
     @media print { @page { margin: 10mm; } }
   </style>
@@ -69,11 +95,11 @@ function generateHtml(plan: RunPlan, results: CheckpointResult[]): string {
 </html>`;
 }
 
-export default function PrintPlan({ plan, results }: Props) {
+export default function PrintPlan({ plan, results, gelResults = [] }: Props) {
   function handlePrint() {
     const win = window.open('', '_blank');
     if (!win) return;
-    win.document.write(generateHtml(plan, results));
+    win.document.write(generateHtml(plan, results, gelResults));
     win.document.close();
     win.focus();
     setTimeout(() => win.print(), 300);

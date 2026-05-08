@@ -43,9 +43,19 @@ export default function GelAdvisorPanel({ settings, onChange, gelCount }: Props)
             />
             <span style={{ fontSize: 12, color: 'var(--text-hint)' }}>min</span>
           </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <label style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Inc. in schedule</label>
+            <button
+              className="ghost"
+              style={{ fontSize: 11, padding: '2px 10px' }}
+              onClick={() => set('gelInSchedule', !settings.gelInSchedule)}
+            >
+              {settings.gelInSchedule ? 'ON' : 'OFF'}
+            </button>
+          </div>
           {gelCount > 0 && (
-            <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-              {gelCount} gel{gelCount !== 1 ? 's' : ''} suggested · drag orange dots on chart to adjust
+            <div style={{ fontSize: 11, color: 'var(--text-hint)' }}>
+              {gelCount} gel{gelCount !== 1 ? 's' : ''} · drag orange dots on chart to adjust
             </div>
           )}
           {gelCount === 0 && (

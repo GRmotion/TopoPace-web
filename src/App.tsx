@@ -4,6 +4,8 @@ import { DEFAULT_PROFILE, DEFAULT_ADVANCED } from './models/types';
 import { computeGelZones } from './algorithm/GelAdvisor';
 import type { ParsedRoute } from './parsers/GpxParser';
 import { buildPlan, computeScheduleFull, elapsedMsAtDist } from './algorithm/PacePlanner';
+import { serializeTopoPace, parseTopoPace, downloadFile } from './utils/TopoPaceFile';
+import type { TopoPaceFileData } from './utils/TopoPaceFile';
 
 import RouteUpload from './components/RouteUpload';
 import ElevationChart from './components/ElevationChart';
@@ -194,6 +196,41 @@ export default function App() {
 
   const canPrint = route && goalH + goalMin > 0 && results.length > 0;
 
+  const openFileRef = useRef<HTMLInputElement>(null);
+
+  const handleSave = useCallback(() => {
+    if (!route) return;
+    const includeCalibration = calibrations.length > 0
+      && window.confirm('Include personal calibration data in the file?');
+    const content = serializeTopoPace({
+      name: route.name,
+      route: { points: route.points, totalDistM: route.totalDistM, totalElevGainM: route.totalElevGainM },
+      goalH, goalMin, raceStartTime,
+      checkpoints, terrainSegments: terrainSegs, gelZones, advancedSettings,
+      calibration: includeCalibration ? calibrations : undefined,
+    });
+    const safeName = route.name.replace(/[^a-z0-9]/gi, '_').replace(/_+/g, '_').slice(0, 60);
+    downloadFile(content, `${safeName}.tppe`);
+  }, [route, goalH, goalMin, raceStartTime, checkpoints, terrainSegs, gelZones, advancedSettings, calibrations]);
+
+  const handleLoadPlan = useCallback((data: TopoPaceFileData) => {
+    const parsedRoute: ParsedRoute = {
+      points: data.route.points,
+      totalDistM: data.route.totalDistM,
+      totalElevGainM: data.route.totalElevGainM,
+      name: data.name,
+    };
+    setRoute(parsedRoute);
+    setGoalH(data.goalH);
+    setGoalMin(data.goalMin);
+    setRaceStartTime(data.raceStartTime);
+    setCheckpoints(data.checkpoints ?? []);
+    setTerrainSegs(data.terrainSegments ?? []);
+    setGelZones(data.gelZones ?? []);
+    setAdvancedSettings(prev => ({ ...prev, ...(data.advancedSettings ?? {}) }));
+    if (data.calibration?.length) setCalibrations(data.calibration);
+  }, []);
+
   const getChartSvgHtml = useCallback((): string | null => {
     const svgEl = chartWrapRef.current?.querySelector('svg');
     if (!svgEl) return null;
@@ -245,14 +282,42 @@ export default function App() {
             <p style={{ textAlign: 'center', color: 'var(--text-secondary)', marginBottom: 32 }}>
               Upload a GPX route to start building your race day schedule
             </p>
-            <RouteUpload onRoute={handleRouteLoad} />
+            <RouteUpload onRoute={handleRouteLoad} onPlan={handleLoadPlan} />
           </div>
         ) : (
           <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
             <aside style={{ width: 320, minWidth: 280, background: 'var(--bg-card)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
               {/* Scrollable top */}
               <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, padding: 14 }}>
-                <RouteUpload onRoute={handleRouteLoad} compact />
+                {/* Hidden input for opening .tppe files */}
+                <input
+                  ref={openFileRef}
+                  type="file"
+                  accept=".tppe,.json"
+                  style={{ display: 'none' }}
+                  onChange={async e => {
+                    const f = e.target.files?.[0];
+                    if (!f) return;
+                    e.target.value = '';
+                    try { handleLoadPlan(parseTopoPace(await f.text())); } catch (err) { alert((err as Error).message); }
+                  }}
+                />
+                {/* Save / Open / Replace row */}
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button
+                    className="ghost"
+                    title="Save plan (.tppe)"
+                    style={{ flex: 1, fontSize: 12, padding: '5px 0' }}
+                    onClick={handleSave}
+                  >💾 Save</button>
+                  <button
+                    className="ghost"
+                    title="Open plan (.tppe)"
+                    style={{ flex: 1, fontSize: 12, padding: '5px 0' }}
+                    onClick={() => openFileRef.current?.click()}
+                  >📂 Open</button>
+                  <RouteUpload onRoute={handleRouteLoad} compact />
+                </div>
                 <GoalTimeForm
                   goalH={goalH} goalMin={goalMin}
                   raceStartTime={raceStartTime}

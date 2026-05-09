@@ -21,7 +21,7 @@ export default function App() {
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([]);
   const [goalH, setGoalH] = useState(10);
   const [goalMin, setGoalMin] = useState(0);
-  const [raceStartTime, setRaceStartTime] = useState('06:00');
+  const [raceStartTime, setRaceStartTime] = useState('08:00');
   const [calibrations, setCalibrations] = useState<CalibrationResult[]>(() => {
     try {
       const saved = localStorage.getItem('topopace_calibration');
@@ -43,6 +43,8 @@ export default function App() {
   }, [advancedSettings]);
 
   const [gelZones, setGelZones] = useState<GelZone[]>([]);
+  const [removedGel, setRemovedGel] = useState<{ zone: GelZone; gelNumber: number } | null>(null);
+  const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [profileMode, setProfileMode] = useState<'table' | 'chart'>('chart');
   const chartWrapRef = useRef<HTMLDivElement>(null);
 
@@ -50,7 +52,6 @@ export default function App() {
     if (profileMode === 'chart') setChartHeight(h => Math.max(h, 300));
   }, [profileMode]);
 
-  const [pendingDistM, setPendingDistM] = useState<number | null>(null);
   const [hoverDistM, setHoverDistM] = useState<number | null>(null);
   const [terrainSegs, setTerrainSegs] = useState<TerrainSegment[]>([]);
 
@@ -123,6 +124,28 @@ export default function App() {
 
   const handleGelZonesChange = useCallback((zones: GelZone[]) => setGelZones(zones), []);
 
+  const handleAddGelAt = useCallback((distM: number) => {
+    setGelZones(prev => [...prev, { id: crypto.randomUUID(), centerKm: distM / 1000, widthKm: 0.3 }]);
+  }, []);
+
+  const handleGelRemove = useCallback((id: string) => {
+    const sorted = gelZones.slice().sort((a, b) => a.centerKm - b.centerKm);
+    const idx = sorted.findIndex(z => z.id === id);
+    const zone = gelZones.find(z => z.id === id);
+    if (!zone) return;
+    setGelZones(prev => prev.filter(z => z.id !== id));
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    setRemovedGel({ zone, gelNumber: idx + 1 });
+    undoTimerRef.current = setTimeout(() => { setRemovedGel(null); undoTimerRef.current = null; }, 5000);
+  }, [gelZones]);
+
+  const handleGelUndo = useCallback(() => {
+    if (!removedGel) return;
+    if (undoTimerRef.current) { clearTimeout(undoTimerRef.current); undoTimerRef.current = null; }
+    setGelZones(prev => [...prev, removedGel.zone]);
+    setRemovedGel(null);
+  }, [removedGel]);
+
   const gelResults = useMemo(() => {
     if (!gelZones.length || !segments.length) return [];
     return gelZones
@@ -140,6 +163,11 @@ export default function App() {
     setRoute(parsed);
     setCheckpoints([]);
     setTerrainSegs([]);
+    // Auto-estimate goal time: ~5:15 min/km flat + Naismith adjusted, rounded to 15 min
+    const estSec = ((parsed.totalDistM / 1000) * 420 + parsed.totalElevGainM * 6) * 0.75;
+    const roundedMin = Math.round(estSec / 60 / 15) * 15;
+    setGoalH(Math.floor(roundedMin / 60));
+    setGoalMin(roundedMin % 60);
   }, []);
 
   const handleAdjustStop = useCallback((id: string, deltaMin: number) => {
@@ -235,8 +263,6 @@ export default function App() {
                   checkpoints={checkpoints}
                   totalDistM={route.totalDistM}
                   onChange={setCheckpoints}
-                  pendingDistM={pendingDistM}
-                  onPendingClear={() => setPendingDistM(null)}
                 />
                 <GelAdvisorPanel
                   settings={advancedSettings}
@@ -308,7 +334,17 @@ export default function App() {
                     terrainSegments={terrainSegs}
                     gelZones={gelZones}
                     onGelZonesChange={handleGelZonesChange}
-                    onClickDist={distM => setPendingDistM(distM)}
+                    onClickDistTyped={(distM, type) => {
+                      const distKm = distM / 1000;
+                      setCheckpoints(prev => [...prev, {
+                        id: crypto.randomUUID(),
+                        name: type === 'aid' ? `Aid ${distKm.toFixed(1)}km` : `POI ${distKm.toFixed(1)}km`,
+                        distM,
+                        type,
+                        plannedStopMin: type === 'aid' ? 5 : 0,
+                      }]);
+                    }}
+                    onAddGelAt={advancedSettings.gelEnabled ? handleAddGelAt : undefined}
                     onHoverDist={setHoverDistM}
                     onMarkSelection={handleMarkSelection}
                     onUpdateTerrain={handleUpdateTerrain}
@@ -316,6 +352,7 @@ export default function App() {
                     results={results as CheckpointResult[]}
                     gelResults={advancedSettings.gelInSchedule ? gelResults : []}
                     showScheduleLabels={profileMode === 'chart'}
+                    onGelRemove={handleGelRemove}
                   />
                 </div>
                 {results.length > 0 && profileMode === 'table' && (
@@ -342,6 +379,21 @@ export default function App() {
           </div>
         )}
       </main>
+
+      {removedGel && (
+        <div style={{
+          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+          background: 'var(--bg-card)', border: '1px solid var(--border)',
+          borderRadius: 10, padding: '10px 18px',
+          display: 'flex', alignItems: 'center', gap: 12,
+          boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+          fontSize: 13, zIndex: 9999,
+          whiteSpace: 'nowrap',
+        }}>
+          <span style={{ color: 'var(--text-secondary)' }}>Gel {removedGel.gelNumber} removed</span>
+          <button className="primary" style={{ fontSize: 12, padding: '3px 12px' }} onClick={handleGelUndo}>Undo</button>
+        </div>
+      )}
     </div>
   );
 }

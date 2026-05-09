@@ -72,9 +72,8 @@ export function computeGelZones(
   const totalSec = table[table.length - 1].elapsedSec;
   const intervalSec = settings.gelIntervalMin * 60;
 
-  // Ticks: start at half-interval to avoid taking gel right at the start
   const ticks: number[] = [];
-  for (let t = intervalSec / 2; t < totalSec - intervalSec / 4; t += intervalSec) {
+  for (let t = intervalSec; t < totalSec - intervalSec / 4; t += intervalSec) {
     ticks.push(t);
   }
 

@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import type { AdvancedSettings } from '../models/types';
 
 interface Props {
@@ -9,6 +10,22 @@ interface Props {
 export default function GelAdvisorPanel({ settings, onChange, gelCount }: Props) {
   function set<K extends keyof AdvancedSettings>(key: K, value: AdvancedSettings[K]) {
     onChange({ ...settings, [key]: value });
+  }
+
+  const [intervalInput, setIntervalInput] = useState(String(settings.gelIntervalMin));
+  useEffect(() => { setIntervalInput(String(settings.gelIntervalMin)); }, [settings.gelIntervalMin]);
+
+  function commitInterval(raw: string) {
+    const v = parseInt(raw);
+    const clamped = isNaN(v) ? settings.gelIntervalMin : Math.min(500, Math.max(10, v));
+    set('gelIntervalMin', clamped);
+    setIntervalInput(String(clamped));
+  }
+
+  function stepInterval(delta: number) {
+    const next = Math.min(500, Math.max(10, settings.gelIntervalMin + delta));
+    set('gelIntervalMin', next);
+    setIntervalInput(String(next));
   }
 
   return (
@@ -33,15 +50,29 @@ export default function GelAdvisorPanel({ settings, onChange, gelCount }: Props)
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <label style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Interval</label>
             <input
+              className="no-spinners"
               type="number"
-              min={15}
-              max={120}
-              step={5}
-              value={settings.gelIntervalMin}
-              onChange={e => set('gelIntervalMin', Math.max(15, parseInt(e.target.value) || 40))}
+              min={10}
+              max={500}
+              value={intervalInput}
+              onChange={e => setIntervalInput(e.target.value)}
+              onBlur={() => commitInterval(intervalInput)}
+              onKeyDown={e => { if (e.key === 'Enter') commitInterval(intervalInput); }}
               style={{ width: 64, textAlign: 'center' }}
             />
             <span style={{ fontSize: 12, color: 'var(--text-hint)' }}>min</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+              <button
+                onMouseDown={e => e.preventDefault()}
+                onClick={() => stepInterval(5)}
+                style={{ background: 'none', border: 'none', padding: '1px 4px', color: 'var(--green)', fontSize: 9, lineHeight: 1, cursor: 'pointer', borderRadius: 3 }}
+              >▲</button>
+              <button
+                onMouseDown={e => e.preventDefault()}
+                onClick={() => stepInterval(-5)}
+                style={{ background: 'none', border: 'none', padding: '1px 4px', color: 'var(--green)', fontSize: 9, lineHeight: 1, cursor: 'pointer', borderRadius: 3 }}
+              >▼</button>
+            </div>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <label style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Inc. in schedule</label>

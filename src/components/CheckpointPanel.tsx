@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import type { Checkpoint, CheckpointType } from '../models/types';
 
 const AID_COLORS = ['#ffd54f', '#ff9800', '#ef5350', '#42a5f5', '#66bb6a', '#ab47bc'];
@@ -7,24 +7,25 @@ interface Props {
   checkpoints: Checkpoint[];
   totalDistM: number;
   onChange: (cps: Checkpoint[]) => void;
-  pendingDistM: number | null;
-  onPendingClear: () => void;
 }
 
-function newCp(distM: number): Checkpoint {
-  return { id: crypto.randomUUID(), name: '', distM, type: 'aid', plannedStopMin: 5 };
+function newCp(distM: number, type: CheckpointType = 'aid'): Checkpoint {
+  return { id: crypto.randomUUID(), name: '', distM, type, plannedStopMin: type === 'aid' ? 5 : 0 };
 }
 
-export default function CheckpointPanel({ checkpoints, totalDistM, onChange, pendingDistM, onPendingClear }: Props) {
+export default function CheckpointPanel({ checkpoints, totalDistM, onChange }: Props) {
   const [editing, setEditing] = useState<Checkpoint | null>(null);
   const [addingManual, setAddingManual] = useState(false);
   const [manualKm, setManualKm] = useState('');
-  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [colorHoverId, setColorHoverId] = useState<string | null>(null);
+  const colorLeaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  if (pendingDistM !== null && editing === null) {
-    const cp = newCp(pendingDistM);
-    setEditing(cp);
-    onPendingClear();
+  function showColor(id: string) {
+    if (colorLeaveTimer.current) clearTimeout(colorLeaveTimer.current);
+    setColorHoverId(id);
+  }
+  function hideColor() {
+    colorLeaveTimer.current = setTimeout(() => setColorHoverId(null), 200);
   }
 
   function save(cp: Checkpoint) {
@@ -80,17 +81,56 @@ export default function CheckpointPanel({ checkpoints, totalDistM, onChange, pen
       {sorted.map(cp => (
         <div
           key={cp.id}
-          style={{ background: 'var(--bg-elevated)', borderRadius: 8, overflow: 'hidden' }}
-          onMouseEnter={() => setHoveredId(cp.id)}
-          onMouseLeave={() => setHoveredId(null)}
+          style={{ background: 'var(--bg-elevated)', borderRadius: 8, overflow: 'visible' }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', position: 'relative' }}>
             {cp.type === 'aid' ? (
-              <span style={{
-                display: 'inline-block', width: 12, height: 12, borderRadius: '50%', flexShrink: 0,
-                background: cp.color || '#ffd54f',
-                boxShadow: '0 0 0 1.5px rgba(0,0,0,0.3)',
-              }} />
+              /* Color dot — hover triggers swatch palette */
+              <div
+                style={{ position: 'relative', flexShrink: 0 }}
+                onMouseEnter={() => showColor(cp.id)}
+                onMouseLeave={hideColor}
+              >
+                <span style={{
+                  display: 'inline-block', width: 12, height: 12, borderRadius: '50%',
+                  background: cp.color || '#ffd54f',
+                  boxShadow: '0 0 0 1.5px rgba(0,0,0,0.3)',
+                  cursor: 'pointer',
+                }} />
+                {colorHoverId === cp.id && (
+                  <div
+                    className="anim-pop"
+                    onMouseEnter={() => showColor(cp.id)}
+                    onMouseLeave={hideColor}
+                    style={{
+                      position: 'absolute',
+                      top: '50%', left: 18,
+                      transform: 'translateY(-50%)',
+                      transformOrigin: 'left center',
+                      display: 'flex', gap: 5, alignItems: 'center',
+                      background: 'var(--bg-card)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 8, padding: '5px 8px',
+                      zIndex: 50,
+                      boxShadow: '0 3px 12px rgba(0,0,0,0.45)',
+                      whiteSpace: 'nowrap',
+                    }}>
+                    {AID_COLORS.map(color => (
+                      <button
+                        key={color}
+                        onClick={() => { onChange(checkpoints.map(c => c.id === cp.id ? { ...c, color } : c)); setColorHoverId(null); }}
+                        style={{
+                          width: 16, height: 16, borderRadius: '50%', background: color, border: 'none',
+                          cursor: 'pointer', padding: 0, flexShrink: 0,
+                          outline: (cp.color || '#ffd54f') === color ? '2.5px solid #fff' : 'none',
+                          outlineOffset: 1,
+                          boxShadow: '0 0 0 1px rgba(0,0,0,0.35)',
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
             ) : (
               <span style={{ fontSize: 13, flexShrink: 0 }}>📍</span>
             )}
@@ -105,25 +145,6 @@ export default function CheckpointPanel({ checkpoints, totalDistM, onChange, pen
             <button className="ghost" style={{ fontSize: 11, padding: '2px 8px' }} onClick={() => setEditing({ ...cp })}>Edit</button>
             <button className="ghost" style={{ fontSize: 11, padding: '2px 6px', color: 'var(--red)', borderColor: 'var(--red)' }} onClick={() => remove(cp.id)}>✕</button>
           </div>
-          {/* Color swatches — appear on hover for aid stations */}
-          {hoveredId === cp.id && cp.type === 'aid' && (
-            <div style={{ display: 'flex', gap: 6, padding: '0 10px 8px', alignItems: 'center' }}>
-              <span style={{ fontSize: 10, color: 'var(--text-hint)', marginRight: 2 }}>Color:</span>
-              {AID_COLORS.map(color => (
-                <button
-                  key={color}
-                  onClick={() => onChange(checkpoints.map(c => c.id === cp.id ? { ...c, color } : c))}
-                  style={{
-                    width: 14, height: 14, borderRadius: '50%', background: color, border: 'none',
-                    cursor: 'pointer', padding: 0, flexShrink: 0,
-                    outline: (cp.color || '#ffd54f') === color ? '2px solid #fff' : 'none',
-                    outlineOffset: 1,
-                    boxShadow: '0 0 0 1px rgba(0,0,0,0.3)',
-                  }}
-                />
-              ))}
-            </div>
-          )}
         </div>
       ))}
 

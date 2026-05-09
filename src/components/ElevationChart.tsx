@@ -169,10 +169,10 @@ export default function ElevationChart({
   const areaPath = pts ? `M ${pts} L ${kmToX(maxKm).toFixed(1)},${(MT + plotH).toFixed(1)} L ${kmToX(minKm).toFixed(1)},${(MT + plotH).toFixed(1)} Z` : '';
 
   // Axes
-  const yTicks = Array.from({ length: 5 }, (_, i) => {
-    const ele = minEle + (i / 4) * eleRange;
-    return { ele, y: eleToY(ele) };
-  });
+  const yStep = [5, 10, 25, 50, 100, 250, 500].find(v => eleRange / v <= 8) ?? 500;
+  const yTicks: { ele: number; y: number }[] = [];
+  for (let e = Math.ceil(minEle / yStep) * yStep; e <= maxEle; e += yStep)
+    yTicks.push({ ele: e, y: eleToY(e) });
   const xInterval = [1, 2, 5, 10, 20, 25, 50, 100].find(v => kmSpan / v <= 20) ?? 100;
   const xTicks: number[] = [];
   for (let k = Math.ceil(minKm / xInterval) * xInterval; k <= maxKm; k += xInterval) xTicks.push(k);

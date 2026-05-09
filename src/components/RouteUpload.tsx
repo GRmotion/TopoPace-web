@@ -23,16 +23,16 @@ export default function RouteUpload({ onRoute, onPlan, compact }: Props) {
       } catch (e) { setError((e as Error).message); }
       return;
     }
-    if ((name.endsWith('.topopace') || name.endsWith('.json')) && onPlan) {
+    if ((name.endsWith('.tppe') || name.endsWith('.json')) && onPlan) {
       try {
         onPlan(parseTopoPace(await file.text()));
       } catch (e) { setError((e as Error).message); }
       return;
     }
-    setError('Please select a .gpx or .topopace file');
+    setError('Please select a .gpx or .tppe file');
   }
 
-  const accept = onPlan ? '.gpx,.topopace,.json' : '.gpx';
+  const accept = onPlan ? '.gpx,.tppe,.json' : '.gpx';
 
   const input = (
     <input
@@ -82,7 +82,7 @@ export default function RouteUpload({ onRoute, onPlan, compact }: Props) {
       {input}
       <div style={{ fontSize: 32, marginBottom: 12 }}>🏔</div>
       <div style={{ fontWeight: 600, marginBottom: 6 }}>Drop GPX or TopoPace file here</div>
-      <div style={{ color: 'var(--text-secondary)', fontSize: 12 }}>or click to browse · .gpx / .topopace</div>
+      <div style={{ color: 'var(--text-secondary)', fontSize: 12 }}>or click to browse · .gpx / .tppe</div>
       {error && <div style={{ color: 'var(--red)', marginTop: 12, fontSize: 13 }}>{error}</div>}
     </div>
   );

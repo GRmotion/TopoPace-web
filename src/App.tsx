@@ -210,7 +210,7 @@ export default function App() {
       calibration: includeCalibration ? calibrations : undefined,
     });
     const safeName = route.name.replace(/[^a-z0-9]/gi, '_').replace(/_+/g, '_').slice(0, 60);
-    downloadFile(content, `${safeName}.topopace`);
+    downloadFile(content, `${safeName}.tppe`);
   }, [route, goalH, goalMin, raceStartTime, checkpoints, terrainSegs, gelZones, advancedSettings, calibrations]);
 
   const handleLoadPlan = useCallback((data: TopoPaceFileData) => {
@@ -289,11 +289,11 @@ export default function App() {
             <aside style={{ width: 320, minWidth: 280, background: 'var(--bg-card)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
               {/* Scrollable top */}
               <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, padding: 14 }}>
-                {/* Hidden input for opening .topopace files */}
+                {/* Hidden input for opening .tppe files */}
                 <input
                   ref={openFileRef}
                   type="file"
-                  accept=".topopace,.json"
+                  accept=".tppe,.json"
                   style={{ display: 'none' }}
                   onChange={async e => {
                     const f = e.target.files?.[0];
@@ -306,13 +306,13 @@ export default function App() {
                 <div style={{ display: 'flex', gap: 6 }}>
                   <button
                     className="ghost"
-                    title="Save plan (.topopace)"
+                    title="Save plan (.tppe)"
                     style={{ flex: 1, fontSize: 12, padding: '5px 0' }}
                     onClick={handleSave}
                   >💾 Save</button>
                   <button
                     className="ghost"
-                    title="Open plan (.topopace)"
+                    title="Open plan (.tppe)"
                     style={{ flex: 1, fontSize: 12, padding: '5px 0' }}
                     onClick={() => openFileRef.current?.click()}
                   >📂 Open</button>

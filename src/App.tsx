@@ -20,6 +20,8 @@ import GelAdvisorPanel from './components/GelAdvisorPanel';
 
 export default function App() {
   const [route, setRoute] = useState<ParsedRoute | null>(null);
+  const [raceName, setRaceName] = useState('');
+  const [editingName, setEditingName] = useState(false);
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([]);
   const [goalH, setGoalH] = useState(10);
   const [goalMin, setGoalMin] = useState(0);
@@ -163,6 +165,7 @@ export default function App() {
 
   const handleRouteLoad = useCallback((parsed: ParsedRoute) => {
     setRoute(parsed);
+    setRaceName(parsed.name);
     setCheckpoints([]);
     setTerrainSegs([]);
     // Auto-estimate goal time: ~5:15 min/km flat + Naismith adjusted, rounded to 15 min
@@ -203,13 +206,13 @@ export default function App() {
     const includeCalibration = calibrations.length > 0
       && window.confirm('Include personal calibration data in the file?');
     const content = serializeTopoPace({
-      name: route.name,
+      name: raceName || route.name,
       route: { points: route.points, totalDistM: route.totalDistM, totalElevGainM: route.totalElevGainM },
       goalH, goalMin, raceStartTime,
       checkpoints, terrainSegments: terrainSegs, gelZones, advancedSettings,
       calibration: includeCalibration ? calibrations : undefined,
     });
-    const safeName = route.name.replace(/[^a-z0-9]/gi, '_').replace(/_+/g, '_').slice(0, 60);
+    const safeName = (raceName || route.name).replace(/[^a-z0-9]/gi, '_').replace(/_+/g, '_').slice(0, 60);
     downloadFile(content, `${safeName}.tppe`);
   }, [route, goalH, goalMin, raceStartTime, checkpoints, terrainSegs, gelZones, advancedSettings, calibrations]);
 
@@ -221,6 +224,7 @@ export default function App() {
       name: data.name,
     };
     setRoute(parsedRoute);
+    setRaceName(data.name);
     setGoalH(data.goalH);
     setGoalMin(data.goalMin);
     setRaceStartTime(data.raceStartTime);
@@ -266,7 +270,22 @@ export default function App() {
         </div>
         {route && (
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
-            <span style={{ fontWeight: 600 }}>{route.name}</span>
+            {editingName ? (
+              <input
+                autoFocus
+                value={raceName}
+                onChange={e => setRaceName(e.target.value)}
+                onBlur={() => { setEditingName(false); if (!raceName.trim()) setRaceName(route.name); }}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') { setEditingName(false); if (!raceName.trim()) setRaceName(route.name); } }}
+                style={{ fontWeight: 600, fontSize: 13, background: 'transparent', border: 'none', borderBottom: '1px solid var(--green)', color: 'var(--text)', outline: 'none', padding: '0 2px', minWidth: 80, maxWidth: 260 }}
+              />
+            ) : (
+              <span
+                style={{ fontWeight: 600, cursor: 'text', borderBottom: '1px solid transparent' }}
+                title="Click to rename"
+                onClick={() => setEditingName(true)}
+              >{raceName || route.name}</span>
+            )}
             <span>·</span>
             <span>{(route.totalDistM / 1000).toFixed(1)} km</span>
             <span>·</span>

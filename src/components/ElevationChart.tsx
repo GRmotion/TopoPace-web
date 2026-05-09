@@ -318,6 +318,10 @@ export default function ElevationChart({
           <line key={i} x1={ML} y1={t.y} x2={ML + plotW} y2={t.y}
             stroke="var(--border)" strokeWidth={0.5} />
         ))}
+        {w > 0 && xTicks.map(k => (
+          <line key={k} x1={kmToX(k)} y1={MT} x2={kmToX(k)} y2={MT + plotH}
+            stroke="var(--border)" strokeWidth={0.5} />
+        ))}
 
         {/* Terrain regions */}
         {w > 0 && terrainSegments?.map(t => {

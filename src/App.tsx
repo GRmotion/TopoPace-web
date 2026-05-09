@@ -47,6 +47,7 @@ export default function App() {
   }, [advancedSettings]);
 
   const [gelZones, setGelZones] = useState<GelZone[]>([]);
+  const gelZonesLockedRef = useRef(false);
   const [removedGel, setRemovedGel] = useState<{ zone: GelZone; gelNumber: number } | null>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [profileMode, setProfileMode] = useState<'table' | 'chart'>('chart');
@@ -118,6 +119,7 @@ export default function App() {
   }, [plan]);
 
   useEffect(() => {
+    if (gelZonesLockedRef.current) { gelZonesLockedRef.current = false; return; }
     if (!advancedSettings.gelEnabled || segments.length === 0 || !route) {
       setGelZones([]);
       return;
@@ -233,6 +235,7 @@ export default function App() {
     setGelZones(data.gelZones ?? []);
     setAdvancedSettings(prev => ({ ...prev, ...(data.advancedSettings ?? {}) }));
     if (data.calibration?.length) setCalibrations(data.calibration);
+    if (data.gelZones?.length) gelZonesLockedRef.current = true;
   }, []);
 
   const getChartSvgHtml = useCallback((): string | null => {

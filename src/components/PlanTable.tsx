@@ -5,6 +5,8 @@ interface Props {
   results: CheckpointResult[];
   gelResults?: GelResult[];
   onAdjustStop: (id: string, deltaMin: number) => void;
+  timeFormat?: '12h' | '24h';
+  distUnit?: 'km' | 'mi';
 }
 
 function bufferColor(min: number | null): string {
@@ -16,7 +18,7 @@ function bufferColor(min: number | null): string {
 
 type Row = { kind: 'cp'; data: CheckpointResult } | { kind: 'gel'; data: GelResult };
 
-export default function PlanTable({ results, gelResults = [], onAdjustStop }: Props) {
+export default function PlanTable({ results, gelResults = [], onAdjustStop, timeFormat = '24h', distUnit = 'km' }: Props) {
   const hasCutoff = results.some(r => r.cutoffTime);
 
   const rows: Row[] = [
@@ -38,7 +40,7 @@ export default function PlanTable({ results, gelResults = [], onAdjustStop }: Pr
           <tr style={{ color: 'var(--text-secondary)', fontSize: 11 }}>
             <th style={th}>#</th>
             <th style={{ ...th, textAlign: 'left' }}>Checkpoint</th>
-            <th style={th}>km</th>
+            <th style={th}>{distUnit === 'mi' ? 'mi' : 'km'}</th>
             <th style={th}>Avg pace</th>
             <th style={th}>ETA</th>
             <th style={th}>Stop</th>
@@ -58,11 +60,11 @@ export default function PlanTable({ results, gelResults = [], onAdjustStop }: Pr
                     <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#ff9800', marginRight: 6, flexShrink: 0, verticalAlign: 'middle' }} />
                     <span style={{ color: '#ff9800', fontWeight: 600 }}>Gel {g.gelNumber}</span>
                   </td>
-                  <td style={td}>{(g.distM / 1000).toFixed(1)}</td>
+                  <td style={td}>{distUnit === 'mi' ? (g.distM / 1609.344).toFixed(1) : (g.distM / 1000).toFixed(1)}</td>
                   <td style={{ ...td, color: 'var(--text-secondary)' }}>—</td>
-                  <td style={{ ...td, fontWeight: 600 }}>{formatTime(g.etaMs)}</td>
+                  <td style={{ ...td, fontWeight: 600 }}>{formatTime(g.etaMs, timeFormat)}</td>
                   <td style={td}>—</td>
-                  <td style={{ ...td, fontWeight: 600 }}>{formatTime(g.etaMs)}</td>
+                  <td style={{ ...td, fontWeight: 600 }}>{formatTime(g.etaMs, timeFormat)}</td>
                   {hasCutoff && <td style={td}>—</td>}
                   {hasCutoff && <td style={td}>—</td>}
                 </tr>
@@ -83,9 +85,9 @@ export default function PlanTable({ results, gelResults = [], onAdjustStop }: Pr
                   <span style={{ fontWeight: 600 }}>{r.name}</span>
                   {r.note && <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>{r.note}</div>}
                 </td>
-                <td style={td}>{(r.distM / 1000).toFixed(1)}</td>
+                <td style={td}>{distUnit === 'mi' ? (r.distM / 1609.344).toFixed(1) : (r.distM / 1000).toFixed(1)}</td>
                 <td style={{ ...td, color: 'var(--text-secondary)' }}>{formatPace(r.segmentPaceSecPerKm)}/km</td>
-                <td style={{ ...td, fontWeight: 600 }}>{formatTime(r.etaMs)}</td>
+                <td style={{ ...td, fontWeight: 600 }}>{formatTime(r.etaMs, timeFormat)}</td>
                 <td style={td}>
                   {r.type === 'aid' ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}>
@@ -97,7 +99,7 @@ export default function PlanTable({ results, gelResults = [], onAdjustStop }: Pr
                     </div>
                   ) : '—'}
                 </td>
-                <td style={{ ...td, fontWeight: 600 }}>{formatTime(r.leaveAtMs)}</td>
+                <td style={{ ...td, fontWeight: 600 }}>{formatTime(r.leaveAtMs, timeFormat)}</td>
                 {hasCutoff && <td style={td}>{r.cutoffTime ?? '—'}</td>}
                 {hasCutoff && (
                   <td style={td}>

@@ -1,6 +1,6 @@
 import { useRef, useState, useLayoutEffect, useEffect, useMemo } from 'react';
 import type { TrackPoint, Checkpoint, TrackSegment, TerrainSegment, GelZone, CheckpointResult, GelResult } from '../models/types';
-import { paceAtDist, elapsedMsAtDist, formatTime, formatPace } from '../algorithm/PacePlanner';
+import { paceAtDist, elapsedMsAtDist, formatTime, formatPace, formatDist } from '../algorithm/PacePlanner';
 
 const ML = 50, MR = 14, MT = 10, MB = 28;
 const STRIP_TICK_H = 10; // px from chart baseline to first label row
@@ -26,6 +26,8 @@ interface Props {
   results?: CheckpointResult[];
   gelResults?: GelResult[];
   showScheduleLabels?: boolean;
+  timeFormat?: '12h' | '24h';
+  distUnit?: 'km' | 'mi';
 }
 
 interface DPt { km: number; ele: number; }
@@ -67,6 +69,7 @@ export default function ElevationChart({
   terrainSegments, gelZones, onGelZonesChange, onGelRemove, onClickDist, onClickDistTyped, onAddGelAt, onHoverDist,
   onMarkSelection, onUpdateTerrain, onRemoveTerrain,
   results, gelResults, showScheduleLabels,
+  timeFormat = '24h', distUnit = 'km',
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -257,11 +260,18 @@ export default function ElevationChart({
       distM += cover;
     }
     if (distM === 0) return null;
+    let gainM = 0, lossM = 0;
+    const inRange = points.filter(p => p.distFromStart >= fromM && p.distFromStart <= toM);
+    for (let i = 1; i < inRange.length; i++) {
+      const diff = inRange[i].ele - inRange[i - 1].ele;
+      if (diff > 0) gainM += diff; else lossM -= diff;
+    }
     return {
       startKm: activeTerrain.startKm, endKm: activeTerrain.endKm,
       distKm: distM / 1000, avgPace: timeSec / (distM / 1000), durationMs: timeSec * 1000,
+      gainM, lossM,
     };
-  }, [activeTerrain, segments]);
+  }, [activeTerrain, segments, points]);
 
   // Selection stats
   const selStats = useMemo(() => {
@@ -275,8 +285,14 @@ export default function ElevationChart({
       distM += cover;
     }
     if (distM === 0) return null;
-    return { distKm: distM / 1000, avgPace: timeSec / (distM / 1000), durationMs: timeSec * 1000 };
-  }, [selection, segments]);
+    let gainM = 0, lossM = 0;
+    const inRange = points.filter(p => p.distFromStart >= fromM && p.distFromStart <= toM);
+    for (let i = 1; i < inRange.length; i++) {
+      const diff = inRange[i].ele - inRange[i - 1].ele;
+      if (diff > 0) gainM += diff; else lossM -= diff;
+    }
+    return { distKm: distM / 1000, avgPace: timeSec / (distM / 1000), durationMs: timeSec * 1000, gainM, lossM };
+  }, [selection, segments, points]);
 
   const hoverPace = hover && segments?.length ? paceAtDist(segments, hover.km * 1000) : null;
   const hoverEta = hoverPace && segments && raceStartTime && hover
@@ -402,7 +418,9 @@ export default function ElevationChart({
         <rect x={0} y={MT + plotH} width="100%" height={showScheduleLabels ? MB : MB + 2} fill="var(--bg)" />
         {w > 0 && xTicks.map(k => (
           <text key={k} x={kmToX(k)} y={MT + plotH + 17} textAnchor="middle"
-            fill="var(--text-secondary)" fontSize={11}>{k}km</text>
+            fill="var(--text-secondary)" fontSize={11}>
+            {distUnit === 'mi' ? `${(k * 0.621371).toFixed(0)}mi` : `${k}km`}
+          </text>
         ))}
         <line x1={ML} y1={MT + plotH} x2={ML + plotW} y2={MT + plotH}
           stroke="var(--border)" strokeWidth={1} />
@@ -440,7 +458,7 @@ export default function ElevationChart({
                       </text>
                       <text x={bx + badgeR + 4} y={baseY + topY + 23}
                         fontSize={12} fill={col} fontWeight="700" fontFamily="Arial,sans-serif">
-                        {formatTime(item.data.etaMs)}
+                        {formatTime(item.data.etaMs, timeFormat)}
                       </text>
                     </>
                   ) : (
@@ -460,7 +478,7 @@ export default function ElevationChart({
                       <text x={bx + badgeR + 4} y={baseY + topY + 26}
                         fontSize={13} fill="var(--text)" fontWeight="700"
                         fontFamily="Arial,sans-serif">
-                        {formatTime(item.data.etaMs)}
+                        {formatTime(item.data.etaMs, timeFormat)}
                       </text>
                       {(item.data as CheckpointResult).type === 'aid' &&
                        (item.data as CheckpointResult).plannedStopMin > 0 && (
@@ -503,10 +521,10 @@ export default function ElevationChart({
           borderRadius: 8, padding: '6px 10px', fontSize: 11, lineHeight: 1.7,
           pointerEvents: 'none', zIndex: 10, boxShadow: '0 2px 8px rgba(0,0,0,.4)',
         }}>
-          <div style={{ color: 'var(--text-secondary)' }}>{hover.km.toFixed(2)} km</div>
+          <div style={{ color: 'var(--text-secondary)' }}>{formatDist(hover.km, distUnit)}</div>
           <div style={{ color: 'var(--green)', fontWeight: 600 }}>{Math.round(hover.ele)} m</div>
           {hoverPace && <div>{formatPace(hoverPace)}<span style={{ color: 'var(--text-hint)', marginLeft: 4 }}>/km</span></div>}
-          {hoverEta && <div style={{ color: 'var(--yellow)', fontWeight: 600 }}>ETA {formatTime(hoverEta)}</div>}
+          {hoverEta && <div style={{ color: 'var(--yellow)', fontWeight: 600 }}>ETA {formatTime(hoverEta, timeFormat)}</div>}
         </div>
       )}
 
@@ -664,11 +682,13 @@ export default function ElevationChart({
           pointerEvents: 'none',
         }}>
           <span style={{ color: 'var(--text-secondary)' }}>
-            {selection.startKm.toFixed(1)}–{selection.endKm.toFixed(1)} km
+            {formatDist(selection.startKm, distUnit).split(' ')[0]}–{formatDist(selection.endKm, distUnit)}
           </span>
-          <strong>{selStats.distKm.toFixed(1)} km</strong>
+          <strong>{formatDist(selStats.distKm, distUnit)}</strong>
           <span>{formatPace(selStats.avgPace)}<span style={{ color: 'var(--text-hint)', marginLeft: 2 }}>/km avg</span></span>
           <span style={{ color: 'var(--yellow)', fontWeight: 600 }}>{fmtDur(selStats.durationMs)}</span>
+          {selStats.gainM > 1 && <span style={{ color: 'var(--green)', fontWeight: 600 }}>↗{Math.round(selStats.gainM)}m</span>}
+          {selStats.lossM > 1 && <span style={{ color: '#e57373', fontWeight: 600 }}>↘{Math.round(selStats.lossM)}m</span>}
         </div>
       )}
 
@@ -686,11 +706,13 @@ export default function ElevationChart({
             {activeTerrain!.difficultyPercent > 0 ? '+' : ''}{activeTerrain!.difficultyPercent}%
           </span>
           <span style={{ color: 'var(--text-secondary)' }}>
-            {activeTerrainStats.startKm.toFixed(1)}–{activeTerrainStats.endKm.toFixed(1)} km
+            {formatDist(activeTerrainStats.startKm, distUnit).split(' ')[0]}–{formatDist(activeTerrainStats.endKm, distUnit)}
           </span>
-          <strong>{activeTerrainStats.distKm.toFixed(1)} km</strong>
+          <strong>{formatDist(activeTerrainStats.distKm, distUnit)}</strong>
           <span>{formatPace(activeTerrainStats.avgPace)}<span style={{ color: 'var(--text-hint)', marginLeft: 2 }}>/km avg</span></span>
           <span style={{ color: 'var(--yellow)', fontWeight: 600 }}>{fmtDur(activeTerrainStats.durationMs)}</span>
+          {activeTerrainStats.gainM > 1 && <span style={{ color: 'var(--green)', fontWeight: 600 }}>↗{Math.round(activeTerrainStats.gainM)}m</span>}
+          {activeTerrainStats.lossM > 1 && <span style={{ color: '#e57373', fontWeight: 600 }}>↘{Math.round(activeTerrainStats.lossM)}m</span>}
         </div>
       )}
 

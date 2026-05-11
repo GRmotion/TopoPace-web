@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import type { Checkpoint, RunPlan, PersonalProfile, CalibrationResult, CheckpointResult, TerrainSegment, GelZone, AdvancedSettings } from './models/types';
-import { DEFAULT_PROFILE, DEFAULT_ADVANCED } from './models/types';
+import type { Checkpoint, RunPlan, PersonalProfile, CalibrationResult, CheckpointResult, TerrainSegment, GelZone, AdvancedSettings, UISettings } from './models/types';
+import { DEFAULT_PROFILE, DEFAULT_ADVANCED, DEFAULT_UI_SETTINGS } from './models/types';
 import { computeGelZones } from './algorithm/GelAdvisor';
 import type { ParsedRoute } from './parsers/GpxParser';
 import { buildPlan, computeScheduleFull, elapsedMsAtDist } from './algorithm/PacePlanner';
@@ -51,6 +51,17 @@ export default function App() {
   const [removedGel, setRemovedGel] = useState<{ zone: GelZone; gelNumber: number } | null>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [profileMode, setProfileMode] = useState<'table' | 'chart'>('chart');
+  const [uiSettings, setUiSettings] = useState<UISettings>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('topopace_ui') ?? 'null');
+      return saved ? { ...DEFAULT_UI_SETTINGS, ...saved } : DEFAULT_UI_SETTINGS;
+    } catch { return DEFAULT_UI_SETTINGS; }
+  });
+  useEffect(() => {
+    localStorage.setItem('topopace_ui', JSON.stringify(uiSettings));
+  }, [uiSettings]);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsBtnRef = useRef<HTMLButtonElement>(null);
   const chartWrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -271,30 +282,79 @@ export default function App() {
           <span style={{ fontWeight: 700, fontSize: 18, letterSpacing: '0.04em', color: 'var(--green)' }}>TopoPace</span>
           <span style={{ color: 'var(--text-hint)', fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Race Planner</span>
         </div>
-        {route && (
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
-            {editingName ? (
-              <input
-                autoFocus
-                value={raceName}
-                onChange={e => setRaceName(e.target.value)}
-                onBlur={() => { setEditingName(false); if (!raceName.trim()) setRaceName(route.name); }}
-                onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') { setEditingName(false); if (!raceName.trim()) setRaceName(route.name); } }}
-                style={{ fontWeight: 600, fontSize: 13, background: 'transparent', border: 'none', borderBottom: '1px solid var(--green)', color: 'var(--text)', outline: 'none', padding: '0 2px', minWidth: 80, maxWidth: 260 }}
-              />
-            ) : (
-              <span
-                style={{ fontWeight: 600, cursor: 'text', borderBottom: '1px solid transparent' }}
-                title="Click to rename"
-                onClick={() => setEditingName(true)}
-              >{raceName || route.name}</span>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+          {route && (
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
+              {editingName ? (
+                <input
+                  autoFocus
+                  value={raceName}
+                  onChange={e => setRaceName(e.target.value)}
+                  onBlur={() => { setEditingName(false); if (!raceName.trim()) setRaceName(route.name); }}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') { setEditingName(false); if (!raceName.trim()) setRaceName(route.name); } }}
+                  style={{ fontWeight: 600, fontSize: 13, background: 'transparent', border: 'none', borderBottom: '1px solid var(--green)', color: 'var(--text)', outline: 'none', padding: '0 2px', minWidth: 80, maxWidth: 260 }}
+                />
+              ) : (
+                <span
+                  style={{ fontWeight: 600, cursor: 'text', borderBottom: '1px solid transparent' }}
+                  title="Click to rename"
+                  onClick={() => setEditingName(true)}
+                >{raceName || route.name}</span>
+              )}
+              <span>·</span>
+              <span>{(route.totalDistM / 1000).toFixed(1)} km</span>
+              <span>·</span>
+              <span>↑{Math.round(route.totalElevGainM)}m</span>
+            </div>
+          )}
+          {/* Settings cog */}
+          <div style={{ position: 'relative' }}>
+            <button
+              ref={settingsBtnRef}
+              className="ghost"
+              style={{ fontSize: 16, padding: '4px 8px', lineHeight: 1 }}
+              title="Settings"
+              onClick={() => setSettingsOpen(o => !o)}
+            >⚙</button>
+            {settingsOpen && (
+              <>
+                <div style={{ position: 'fixed', inset: 0, zIndex: 999 }} onClick={() => setSettingsOpen(false)} />
+                <div style={{
+                  position: 'absolute', top: '100%', right: 0, marginTop: 4,
+                  background: 'var(--bg-card)', border: '1px solid var(--border)',
+                  borderRadius: 10, padding: '12px 14px', zIndex: 1000,
+                  boxShadow: '0 4px 20px rgba(0,0,0,.5)', minWidth: 180, fontSize: 12,
+                  display: 'flex', flexDirection: 'column', gap: 10,
+                }}>
+                  <div>
+                    <div style={{ color: 'var(--text-secondary)', marginBottom: 5, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Time format</div>
+                    <div style={{ display: 'flex', gap: 5 }}>
+                      {(['24h', '12h'] as const).map(f => (
+                        <button key={f}
+                          className={uiSettings.timeFormat === f ? 'primary' : 'ghost'}
+                          style={{ flex: 1, fontSize: 11, padding: '3px 0' }}
+                          onClick={() => setUiSettings(s => ({ ...s, timeFormat: f }))}
+                        >{f}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ color: 'var(--text-secondary)', marginBottom: 5, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Distance unit</div>
+                    <div style={{ display: 'flex', gap: 5 }}>
+                      {(['km', 'mi'] as const).map(u => (
+                        <button key={u}
+                          className={uiSettings.distUnit === u ? 'primary' : 'ghost'}
+                          style={{ flex: 1, fontSize: 11, padding: '3px 0' }}
+                          onClick={() => setUiSettings(s => ({ ...s, distUnit: u }))}
+                        >{u}</button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </>
             )}
-            <span>·</span>
-            <span>{(route.totalDistM / 1000).toFixed(1)} km</span>
-            <span>·</span>
-            <span>↑{Math.round(route.totalElevGainM)}m</span>
           </div>
-        )}
+        </div>
       </header>
 
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
@@ -368,6 +428,7 @@ export default function App() {
                     gelResults={advancedSettings.gelInSchedule ? gelResults : []}
                     profileMode={profileMode}
                     getChartSvgHtml={getChartSvgHtml}
+                    timeFormat={uiSettings.timeFormat}
                   />
                 )}
               </div>
@@ -440,6 +501,8 @@ export default function App() {
                     gelResults={advancedSettings.gelInSchedule ? gelResults : []}
                     showScheduleLabels={profileMode === 'chart'}
                     onGelRemove={handleGelRemove}
+                    timeFormat={uiSettings.timeFormat}
+                    distUnit={uiSettings.distUnit}
                   />
                 </div>
                 {results.length > 0 && profileMode === 'table' && (
@@ -457,7 +520,7 @@ export default function App() {
                       <div style={{ width: 32, height: 2, background: 'var(--border)', borderRadius: 2 }} />
                     </div>
                     <div style={{ height: tableHeight, overflow: 'auto', padding: '0 16px 16px' }}>
-                      <PlanTable results={results as CheckpointResult[]} gelResults={advancedSettings.gelInSchedule ? gelResults : []} onAdjustStop={handleAdjustStop} />
+                      <PlanTable results={results as CheckpointResult[]} gelResults={advancedSettings.gelInSchedule ? gelResults : []} onAdjustStop={handleAdjustStop} timeFormat={uiSettings.timeFormat} distUnit={uiSettings.distUnit} />
                     </div>
                   </>
                 )}

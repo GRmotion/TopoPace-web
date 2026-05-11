@@ -99,3 +99,10 @@ export interface GelResult {
   etaMs: number;
   gelNumber: number;
 }
+
+export interface UISettings {
+  timeFormat: '12h' | '24h';
+  distUnit: 'km' | 'mi';
+}
+
+export const DEFAULT_UI_SETTINGS: UISettings = { timeFormat: '24h', distUnit: 'km' };

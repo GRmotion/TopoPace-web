@@ -178,11 +178,24 @@ export function parseTimeToMs(time: string): number {
   return ((h * 60 + m) * 60) * 1000;
 }
 
-export function formatTime(ms: number): string {
+export function formatTime(ms: number, format: '12h' | '24h' = '24h'): string {
   const totalMin = Math.round(ms / 60000);
-  const h = Math.floor(totalMin / 60);
-  const m = totalMin % 60;
-  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+  const day = Math.floor(totalMin / (24 * 60));
+  const minInDay = totalMin % (24 * 60);
+  const h = Math.floor(minInDay / 60);
+  const m = minInDay % 60;
+  const dayPrefix = day > 0 ? `D${day + 1} ` : '';
+  if (format === '12h') {
+    const period = h >= 12 ? 'PM' : 'AM';
+    const h12 = h % 12 || 12;
+    return `${dayPrefix}${h12}:${m.toString().padStart(2, '0')} ${period}`;
+  }
+  return `${dayPrefix}${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+}
+
+export function formatDist(km: number, unit: 'km' | 'mi' = 'km'): string {
+  if (unit === 'mi') return `${(km * 0.621371).toFixed(1)} mi`;
+  return `${km.toFixed(1)} km`;
 }
 
 export function formatPace(secPerKm: number): string {

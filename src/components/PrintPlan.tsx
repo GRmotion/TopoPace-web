@@ -7,6 +7,7 @@ interface Props {
   gelResults?: GelResult[];
   profileMode?: 'table' | 'chart';
   getChartSvgHtml?: () => string | null;
+  timeFormat?: '12h' | '24h';
 }
 
 function bufferStr(min: number | null): string {
@@ -14,7 +15,7 @@ function bufferStr(min: number | null): string {
   return `${min >= 0 ? '+' : ''}${Math.round(min)}min`;
 }
 
-function generateTableHtml(plan: RunPlan, results: CheckpointResult[], gelResults: GelResult[]): string {
+function generateTableHtml(plan: RunPlan, results: CheckpointResult[], gelResults: GelResult[], timeFormat: '12h' | '24h' = '24h'): string {
   const goalH = Math.floor(plan.goalTimeSec / 3600);
   const goalMin = Math.floor((plan.goalTimeSec % 3600) / 60);
   const date = new Date().toLocaleDateString();
@@ -35,9 +36,9 @@ function generateTableHtml(plan: RunPlan, results: CheckpointResult[], gelResult
         <td class="name" style="color:#e67e00">Gel ${g.gelNumber}</td>
         <td>${(g.distM / 1000).toFixed(1)}</td>
         <td>—</td>
-        <td class="bold">${formatTime(g.etaMs)}</td>
+        <td class="bold">${formatTime(g.etaMs, timeFormat)}</td>
         <td>—</td>
-        <td class="bold">${formatTime(g.etaMs)}</td>
+        <td class="bold">${formatTime(g.etaMs, timeFormat)}</td>
         ${hasCutoff ? '<td>—</td><td>—</td>' : ''}
       </tr>`;
     }
@@ -48,9 +49,9 @@ function generateTableHtml(plan: RunPlan, results: CheckpointResult[], gelResult
       <td class="name">${r.name}${r.note ? `<div class="note">${r.note}</div>` : ''}</td>
       <td>${(r.distM / 1000).toFixed(1)}</td>
       <td>${formatPace(r.segmentPaceSecPerKm)}</td>
-      <td class="bold">${formatTime(r.etaMs)}</td>
+      <td class="bold">${formatTime(r.etaMs, timeFormat)}</td>
       <td>${r.type === 'aid' ? `${r.plannedStopMin}min` : '—'}</td>
-      <td class="bold">${formatTime(r.leaveAtMs)}</td>
+      <td class="bold">${formatTime(r.leaveAtMs, timeFormat)}</td>
       ${hasCutoff ? `<td>${r.cutoffTime ?? '—'}</td>` : ''}
       ${hasCutoff ? `<td class="${r.cutoffBufferMin !== null && r.cutoffBufferMin < 10 ? 'red' : ''}">${bufferStr(r.cutoffBufferMin)}</td>` : ''}
     </tr>`;
@@ -131,7 +132,7 @@ function generateProfileHtml(plan: RunPlan, svgHtml: string): string {
 </html>`;
 }
 
-export default function PrintPlan({ plan, results, gelResults = [], profileMode, getChartSvgHtml }: Props) {
+export default function PrintPlan({ plan, results, gelResults = [], profileMode, getChartSvgHtml, timeFormat = '24h' }: Props) {
   function handlePrint() {
     const win = window.open('', '_blank');
     if (!win) return;
@@ -141,9 +142,9 @@ export default function PrintPlan({ plan, results, gelResults = [], profileMode,
       const svgHtml = getChartSvgHtml();
       html = svgHtml
         ? generateProfileHtml(plan, svgHtml)
-        : generateTableHtml(plan, results, gelResults);
+        : generateTableHtml(plan, results, gelResults, timeFormat);
     } else {
-      html = generateTableHtml(plan, results, gelResults);
+      html = generateTableHtml(plan, results, gelResults, timeFormat);
     }
 
     win.document.write(html);

@@ -178,6 +178,27 @@ export function parseTimeToMs(time: string): number {
   return ((h * 60 + m) * 60) * 1000;
 }
 
+/** Returns the route distance (metres) at which elapsed race time equals targetElapsedMs.
+ *  Returns null if the race finishes before reaching that elapsed time. */
+export function distMAtRaceElapsedMs(
+  segments: TrackSegment[],
+  checkpoints: Checkpoint[],
+  raceStartTime: string,
+  targetElapsedMs: number,
+): number | null {
+  if (!segments.length) return null;
+  const totalDist = segments[segments.length - 1].endDist;
+  const targetMs = parseTimeToMs(raceStartTime) + targetElapsedMs;
+  if (elapsedMsAtDist(segments, checkpoints, raceStartTime, totalDist) <= targetMs) return null;
+  let lo = 0, hi = totalDist;
+  for (let i = 0; i < 32; i++) {
+    const mid = (lo + hi) / 2;
+    if (elapsedMsAtDist(segments, checkpoints, raceStartTime, mid) < targetMs) lo = mid;
+    else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
 export function formatTime(ms: number, format: '12h' | '24h' = '24h'): string {
   const totalMin = Math.round(ms / 60000);
   const day = Math.floor(totalMin / (24 * 60));

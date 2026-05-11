@@ -6,9 +6,11 @@ interface Props {
   points: TrackPoint[];
   checkpoints: Checkpoint[];
   hoverDistM?: number | null;
+  defaultCenter?: [number, number];
+  defaultZoom?: number;
 }
 
-export default function RouteMap({ points, checkpoints, hoverDistM }: Props) {
+export default function RouteMap({ points, checkpoints, hoverDistM, defaultCenter, defaultZoom = 10 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const routeLayerRef = useRef<L.Polyline | null>(null);
@@ -17,11 +19,15 @@ export default function RouteMap({ points, checkpoints, hoverDistM }: Props) {
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
-    mapRef.current = L.map(containerRef.current, { zoomControl: true });
+    const map = L.map(containerRef.current, { zoomControl: true });
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors',
-    }).addTo(mapRef.current);
-    return () => { mapRef.current?.remove(); mapRef.current = null; };
+    }).addTo(map);
+    mapRef.current = map;
+    if (points.length === 0 && defaultCenter) {
+      map.setView(defaultCenter, defaultZoom);
+    }
+    return () => { map.remove(); mapRef.current = null; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

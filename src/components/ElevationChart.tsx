@@ -1,6 +1,6 @@
 import { useRef, useState, useLayoutEffect, useEffect, useMemo } from 'react';
 import type { TrackPoint, Checkpoint, TrackSegment, TerrainSegment, GelZone, CheckpointResult, GelResult } from '../models/types';
-import { paceAtDist, elapsedMsAtDist, formatTime, formatPace, formatDist } from '../algorithm/PacePlanner';
+import { paceAtDist, elapsedMsAtDist, formatTime, formatPace, formatDist, distMAtRaceElapsedMs } from '../algorithm/PacePlanner';
 
 const ML = 50, MR = 14, MT = 10, MB = 28;
 const STRIP_TICK_H = 10; // px from chart baseline to first label row
@@ -294,6 +294,16 @@ export default function ElevationChart({
     return { distKm: distM / 1000, avgPace: timeSec / (distM / 1000), durationMs: timeSec * 1000, gainM, lossM };
   }, [selection, segments, points]);
 
+  const timeMarkers = useMemo(() => {
+    if (!segments?.length || !raceStartTime) return [];
+    return [6, 12, 24, 48]
+      .map(h => {
+        const distM = distMAtRaceElapsedMs(segments, checkpoints, raceStartTime, h * 3600 * 1000);
+        return distM !== null ? { km: distM / 1000, label: `${h}h` } : null;
+      })
+      .filter((x): x is { km: number; label: string } => x !== null);
+  }, [segments, checkpoints, raceStartTime]);
+
   const hoverPace = hover && segments?.length ? paceAtDist(segments, hover.km * 1000) : null;
   const hoverEta = hoverPace && segments && raceStartTime && hover
     ? elapsedMsAtDist(segments, checkpoints, raceStartTime, hover.km * 1000) : null;
@@ -338,6 +348,21 @@ export default function ElevationChart({
           <line key={k} x1={kmToX(k)} y1={MT} x2={kmToX(k)} y2={MT + plotH}
             stroke="var(--border)" strokeWidth={0.5} />
         ))}
+
+        {/* Time markers (6h, 12h, 24h, 48h) */}
+        {w > 0 && timeMarkers.map(m => {
+          const x = kmToX(m.km);
+          return (
+            <g key={m.label}>
+              <line x1={x} y1={MT} x2={x} y2={MT + plotH}
+                stroke="rgba(255,255,255,0.18)" strokeWidth={1} strokeDasharray="5,4"
+                clipPath="url(#pc)" />
+              <text x={x + 3} y={MT + plotH - 5} fontSize={9}
+                fill="rgba(255,255,255,0.18)" fontFamily="Arial,sans-serif"
+                clipPath="url(#pc)">{m.label}</text>
+            </g>
+          );
+        })}
 
         {/* Terrain regions */}
         {w > 0 && terrainSegments?.map(t => {

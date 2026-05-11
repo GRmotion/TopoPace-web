@@ -4,10 +4,10 @@ import { DEFAULT_PROFILE, DEFAULT_ADVANCED, DEFAULT_UI_SETTINGS } from './models
 import { computeGelZones } from './algorithm/GelAdvisor';
 import type { ParsedRoute } from './parsers/GpxParser';
 import { buildPlan, computeScheduleFull, elapsedMsAtDist } from './algorithm/PacePlanner';
-import { serializeTopoPace, parseTopoPace, downloadFile } from './utils/TopoPaceFile';
+import { parseRoute } from './parsers/GpxParser';
+import { parseTopoPace } from './utils/TopoPaceFile';
 import type { TopoPaceFileData } from './utils/TopoPaceFile';
 
-import RouteUpload from './components/RouteUpload';
 import ElevationChart from './components/ElevationChart';
 import RouteMap from './components/RouteMap';
 import CheckpointPanel from './components/CheckpointPanel';
@@ -17,6 +17,14 @@ import PlanTable from './components/PlanTable';
 import PrintPlan from './components/PrintPlan';
 import AdvancedSettingsPanel from './components/AdvancedSettingsPanel';
 import GelAdvisorPanel from './components/GelAdvisorPanel';
+import TrailsModal from './components/TrailsModal';
+import Tutorial, { TUTORIAL_DONE_KEY } from './components/Tutorial';
+
+const MOUNTAIN_CENTERS: [number, number][] = [
+  [46.5, 8.0], [47.0, 12.5], [45.9, 6.9],
+  [49.2, 19.9], [50.74, 15.74], [42.6, 0.5],
+  [43.3, -0.9], [47.5, 10.7],
+];
 
 export default function App() {
   const [route, setRoute] = useState<ParsedRoute | null>(null);
@@ -51,6 +59,11 @@ export default function App() {
   const [removedGel, setRemovedGel] = useState<{ zone: GelZone; gelNumber: number } | null>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [profileMode, setProfileMode] = useState<'table' | 'chart'>('chart');
+  const [trailsOpen, setTrailsOpen] = useState(false);
+  const [tutorialActive, setTutorialActive] = useState(false);
+  const defaultMapCenter = useMemo<[number, number]>(
+    () => MOUNTAIN_CENTERS[Math.floor(Math.random() * MOUNTAIN_CENTERS.length)], []
+  );
   const [uiSettings, setUiSettings] = useState<UISettings>(() => {
     try {
       const saved = JSON.parse(localStorage.getItem('topopace_ui') ?? 'null');
@@ -181,11 +194,14 @@ export default function App() {
     setRaceName(parsed.name);
     setCheckpoints([]);
     setTerrainSegs([]);
-    // Auto-estimate goal time: ~5:15 min/km flat + Naismith adjusted, rounded to 15 min
+    setGelZones([]);
     const estSec = ((parsed.totalDistM / 1000) * 420 + parsed.totalElevGainM * 6) * 0.75;
     const roundedMin = Math.round(estSec / 60 / 15) * 15;
     setGoalH(Math.floor(roundedMin / 60));
     setGoalMin(roundedMin % 60);
+    if (!localStorage.getItem(TUTORIAL_DONE_KEY)) {
+      setTimeout(() => setTutorialActive(true), 400);
+    }
   }, []);
 
   const handleAdjustStop = useCallback((id: string, deltaMin: number) => {
@@ -212,22 +228,14 @@ export default function App() {
 
   const canPrint = route && goalH + goalMin > 0 && results.length > 0;
 
-  const openFileRef = useRef<HTMLInputElement>(null);
-
-  const handleSave = useCallback(() => {
-    if (!route) return;
-    const includeCalibration = calibrations.length > 0
-      && window.confirm('Include personal calibration data in the file?');
-    const content = serializeTopoPace({
-      name: raceName || route.name,
-      route: { points: route.points, totalDistM: route.totalDistM, totalElevGainM: route.totalElevGainM },
-      goalH, goalMin, raceStartTime,
-      checkpoints, terrainSegments: terrainSegs, gelZones, advancedSettings,
-      calibration: includeCalibration ? calibrations : undefined,
-    });
-    const safeName = (raceName || route.name).replace(/[^a-z0-9]/gi, '_').replace(/_+/g, '_').slice(0, 60);
-    downloadFile(content, `${safeName}.tppe`);
-  }, [route, goalH, goalMin, raceStartTime, checkpoints, terrainSegs, gelZones, advancedSettings, calibrations]);
+  const currentPlanData: TopoPaceFileData | null = useMemo(() => route ? {
+    version: 3,
+    savedAt: Date.now(),
+    name: raceName || route.name,
+    route: { points: route.points, totalDistM: route.totalDistM, totalElevGainM: route.totalElevGainM },
+    goalH, goalMin, raceStartTime,
+    checkpoints, terrainSegments: terrainSegs, gelZones, advancedSettings,
+  } : null, [route, raceName, goalH, goalMin, raceStartTime, checkpoints, terrainSegs, gelZones, advancedSettings]);
 
   const handleLoadPlan = useCallback((data: TopoPaceFileData) => {
     const parsedRoute: ParsedRoute = {
@@ -296,6 +304,7 @@ export default function App() {
                 />
               ) : (
                 <span
+                  data-tutorial="race-name"
                   style={{ fontWeight: 600, cursor: 'text', borderBottom: '1px solid transparent' }}
                   title="Click to rename"
                   onClick={() => setEditingName(true)}
@@ -307,10 +316,20 @@ export default function App() {
               <span>↑{Math.round(route.totalElevGainM)}m</span>
             </div>
           )}
+          {/* Tutorial "?" button — visible only when route is loaded */}
+          {route && (
+            <button
+              className="ghost"
+              style={{ fontSize: 13, padding: '4px 8px', lineHeight: 1, color: 'var(--text-secondary)' }}
+              title="Start tutorial"
+              onClick={() => setTutorialActive(true)}
+            >?</button>
+          )}
           {/* Settings cog */}
           <div style={{ position: 'relative' }}>
             <button
               ref={settingsBtnRef}
+              data-tutorial="settings-btn"
               className="ghost"
               style={{ fontSize: 16, padding: '4px 8px', lineHeight: 1 }}
               title="Settings"
@@ -357,179 +376,192 @@ export default function App() {
         </div>
       </header>
 
-      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-        {!route ? (
-          <div style={{ maxWidth: 560, margin: '80px auto', width: '100%', padding: '0 20px' }}>
-            <h1 style={{ textAlign: 'center', marginBottom: 8, color: 'var(--green)' }}>Plan Your Race</h1>
-            <p style={{ textAlign: 'center', color: 'var(--text-secondary)', marginBottom: 32 }}>
-              Upload a GPX route to start building your race day schedule
-            </p>
-            <RouteUpload onRoute={handleRouteLoad} onPlan={handleLoadPlan} />
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
-            <aside style={{ width: 320, minWidth: 280, background: 'var(--bg-card)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
-              {/* Scrollable top */}
-              <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, padding: 14 }}>
-                {/* Hidden input for opening .tppe files */}
-                <input
-                  ref={openFileRef}
-                  type="file"
-                  accept=".tppe,.json"
-                  style={{ display: 'none' }}
-                  onChange={async e => {
-                    const f = e.target.files?.[0];
-                    if (!f) return;
-                    e.target.value = '';
-                    try { handleLoadPlan(parseTopoPace(await f.text())); } catch (err) { alert((err as Error).message); }
-                  }}
-                />
-                {/* Save / Open / Replace row */}
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <button
-                    className="ghost"
-                    title="Save plan (.tppe)"
-                    style={{ flex: 1, fontSize: 12, padding: '5px 0' }}
-                    onClick={handleSave}
-                  >💾 Save</button>
-                  <button
-                    className="ghost"
-                    title="Open plan (.tppe)"
-                    style={{ flex: 1, fontSize: 12, padding: '5px 0' }}
-                    onClick={() => openFileRef.current?.click()}
-                  >📂 Open</button>
-                  <RouteUpload onRoute={handleRouteLoad} compact />
-                </div>
-                <GoalTimeForm
-                  goalH={goalH} goalMin={goalMin}
-                  raceStartTime={raceStartTime}
-                  onChangeGoal={(h, m) => { setGoalH(h); setGoalMin(m); }}
-                  onChangeStart={setRaceStartTime}
-                />
-                <CheckpointPanel
-                  checkpoints={checkpoints}
-                  totalDistM={route.totalDistM}
-                  onChange={setCheckpoints}
-                />
-                <GelAdvisorPanel
-                  settings={advancedSettings}
-                  onChange={setAdvancedSettings}
-                  gelCount={gelZones.length}
-                />
-              </div>
-              {/* Fixed bottom */}
-              <div style={{ flexShrink: 0, borderTop: '1px solid var(--border)', padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <AdvancedSettingsPanel settings={advancedSettings} onChange={setAdvancedSettings} />
-                <ActivityUpload existing={calibrations} onCalibrate={setCalibrations} onReset={() => setCalibrations([])} />
-                {canPrint && (
-                  <PrintPlan
-                    plan={{ ...plan!, segments }}
-                    results={results as CheckpointResult[]}
-                    gelResults={advancedSettings.gelInSchedule ? gelResults : []}
-                    profileMode={profileMode}
-                    getChartSvgHtml={getChartSvgHtml}
+      <main style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+        <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+
+          {/* ── Sidebar ── */}
+          <aside style={{ width: 320, minWidth: 280, background: 'var(--bg-card)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
+            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, padding: 14 }}>
+              {/* Trails button — always visible */}
+              <button
+                data-tutorial="trails-btn"
+                className="ghost"
+                style={{ width: '100%', fontSize: 12, padding: '6px 0' }}
+                onClick={() => setTrailsOpen(true)}
+              >🏔 My Trails</button>
+
+              {route ? (
+                <>
+                  <GoalTimeForm
+                    goalH={goalH} goalMin={goalMin}
+                    raceStartTime={raceStartTime}
+                    onChangeGoal={(h, m) => { setGoalH(h); setGoalMin(m); }}
+                    onChangeStart={setRaceStartTime}
                     timeFormat={uiSettings.timeFormat}
+                    totalDistM={route.totalDistM}
+                    totalElevGainM={route.totalElevGainM}
                   />
-                )}
-              </div>
-            </aside>
+                  <div data-tutorial="checkpoints">
+                    <CheckpointPanel checkpoints={checkpoints} totalDistM={route.totalDistM} onChange={setCheckpoints} />
+                  </div>
+                  <div data-tutorial="gel-advisor">
+                    <GelAdvisorPanel settings={advancedSettings} onChange={setAdvancedSettings} gelCount={gelZones.length} />
+                  </div>
+                </>
+              ) : (
+                <div style={{ textAlign: 'center', padding: '32px 8px', color: 'var(--text-hint)', fontSize: 13, lineHeight: 1.7 }}>
+                  Open a trail from My Trails or drag a GPX onto the map
+                </div>
+              )}
+            </div>
 
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
-              <div style={{ flex: 1, minHeight: 150, position: 'relative' }}>
-                <RouteMap
-                  points={route.points}
-                  checkpoints={checkpoints}
-                  hoverDistM={hoverDistM}
-                />
-              </div>
-
-              {/* Chart drag handle */}
-              <div
-                onMouseDown={e => { dragRef.current = { startY: e.clientY, startH: chartHeight, target: 'chart' }; e.preventDefault(); }}
-                style={{
-                  height: 8, background: 'var(--bg-elevated)',
-                  borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)',
-                  cursor: 'row-resize', flexShrink: 0,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}
-              >
-                <div style={{ width: 32, height: 2, background: 'var(--border)', borderRadius: 2 }} />
-              </div>
-
-              <div style={{ background: 'var(--bg)', flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
-                {/* Schedule / Profile toggle */}
-                {results.length > 0 && (
-                  <div style={{ padding: '8px 16px 0', display: 'flex', gap: 4 }}>
-                    <button
-                      className={profileMode === 'table' ? 'primary' : 'ghost'}
-                      style={{ fontSize: 11, padding: '3px 14px' }}
-                      onClick={() => setProfileMode('table')}
-                    >Schedule</button>
-                    <button
-                      className={profileMode === 'chart' ? 'primary' : 'ghost'}
-                      style={{ fontSize: 11, padding: '3px 14px' }}
-                      onClick={() => setProfileMode('chart')}
-                    >Profile</button>
+            {route && (
+              <div style={{ flexShrink: 0, borderTop: '1px solid var(--border)', padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div data-tutorial="run-style">
+                  <AdvancedSettingsPanel settings={advancedSettings} onChange={setAdvancedSettings} />
+                </div>
+                <div data-tutorial="calibration">
+                  <ActivityUpload existing={calibrations} onCalibrate={setCalibrations} onReset={() => setCalibrations([])} />
+                </div>
+                {canPrint && (
+                  <div data-tutorial="print">
+                    <PrintPlan
+                      plan={{ ...plan!, segments }}
+                      results={results as CheckpointResult[]}
+                      gelResults={advancedSettings.gelInSchedule ? gelResults : []}
+                      profileMode={profileMode}
+                      getChartSvgHtml={getChartSvgHtml}
+                      timeFormat={uiSettings.timeFormat}
+                    />
                   </div>
                 )}
-                <div ref={chartWrapRef} style={{ padding: '0 16px', paddingTop: 10 }}>
-                  <ElevationChart
-                    points={route.points}
-                    checkpoints={checkpoints}
-                    segments={segments}
-                    raceStartTime={plan?.raceStartTime}
-                    height={chartHeight}
-                    terrainSegments={terrainSegs}
-                    gelZones={gelZones}
-                    onGelZonesChange={handleGelZonesChange}
-                    onClickDistTyped={(distM, type) => {
-                      const distKm = distM / 1000;
-                      setCheckpoints(prev => [...prev, {
-                        id: crypto.randomUUID(),
-                        name: type === 'aid' ? `Aid ${distKm.toFixed(1)}km` : `POI ${distKm.toFixed(1)}km`,
-                        distM,
-                        type,
-                        plannedStopMin: type === 'aid' ? 5 : 0,
-                      }]);
-                    }}
-                    onAddGelAt={advancedSettings.gelEnabled ? handleAddGelAt : undefined}
-                    onHoverDist={setHoverDistM}
-                    onMarkSelection={handleMarkSelection}
-                    onUpdateTerrain={handleUpdateTerrain}
-                    onRemoveTerrain={handleRemoveTerrain}
-                    results={results as CheckpointResult[]}
-                    gelResults={advancedSettings.gelInSchedule ? gelResults : []}
-                    showScheduleLabels={profileMode === 'chart'}
-                    onGelRemove={handleGelRemove}
-                    timeFormat={uiSettings.timeFormat}
-                    distUnit={uiSettings.distUnit}
-                  />
-                </div>
-                {results.length > 0 && profileMode === 'table' && (
-                  <>
-                    {/* Table drag handle */}
-                    <div
-                      onMouseDown={e => { dragRef.current = { startY: e.clientY, startH: tableHeight, startH2: chartHeight, target: 'table' }; e.preventDefault(); }}
-                      style={{
-                        height: 8, background: 'var(--bg-elevated)',
-                        borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)',
-                        cursor: 'row-resize', flexShrink: 0,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      }}
-                    >
-                      <div style={{ width: 32, height: 2, background: 'var(--border)', borderRadius: 2 }} />
-                    </div>
-                    <div style={{ height: tableHeight, overflow: 'auto', padding: '0 16px 16px' }}>
-                      <PlanTable results={results as CheckpointResult[]} gelResults={advancedSettings.gelInSchedule ? gelResults : []} onAdjustStop={handleAdjustStop} timeFormat={uiSettings.timeFormat} distUnit={uiSettings.distUnit} />
-                    </div>
-                  </>
-                )}
               </div>
+            )}
+          </aside>
+
+          {/* ── Right column (map + chart) ── */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
+            {/* Map — always visible */}
+            <div style={{ flex: route ? undefined : 1, minHeight: route ? 150 : 0, position: 'relative' }}>
+              <RouteMap
+                points={route?.points ?? []}
+                checkpoints={route ? checkpoints : []}
+                hoverDistM={hoverDistM}
+                defaultCenter={defaultMapCenter}
+                defaultZoom={10}
+              />
             </div>
+
+            {route && (
+              <>
+                {/* Chart drag handle */}
+                <div
+                  onMouseDown={e => { dragRef.current = { startY: e.clientY, startH: chartHeight, target: 'chart' }; e.preventDefault(); }}
+                  style={{
+                    height: 8, background: 'var(--bg-elevated)',
+                    borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)',
+                    cursor: 'row-resize', flexShrink: 0,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}
+                >
+                  <div style={{ width: 32, height: 2, background: 'var(--border)', borderRadius: 2 }} />
+                </div>
+
+                <div style={{ background: 'var(--bg)', flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
+                  {/* Schedule / Profile toggle */}
+                  {results.length > 0 && (
+                    <div data-tutorial="mode-toggle" style={{ padding: '8px 16px 0', display: 'flex', gap: 4 }}>
+                      <button
+                        className={profileMode === 'table' ? 'primary' : 'ghost'}
+                        style={{ fontSize: 11, padding: '3px 14px' }}
+                        onClick={() => setProfileMode('table')}
+                      >Schedule</button>
+                      <button
+                        className={profileMode === 'chart' ? 'primary' : 'ghost'}
+                        style={{ fontSize: 11, padding: '3px 14px' }}
+                        onClick={() => setProfileMode('chart')}
+                      >Profile</button>
+                    </div>
+                  )}
+                  <div data-tutorial="elevation-chart" ref={chartWrapRef} style={{ padding: '0 16px', paddingTop: 10 }}>
+                    <ElevationChart
+                      points={route.points}
+                      checkpoints={checkpoints}
+                      segments={segments}
+                      raceStartTime={plan?.raceStartTime}
+                      height={chartHeight}
+                      terrainSegments={terrainSegs}
+                      gelZones={gelZones}
+                      onGelZonesChange={handleGelZonesChange}
+                      onClickDistTyped={(distM, type) => {
+                        const distKm = distM / 1000;
+                        setCheckpoints(prev => [...prev, {
+                          id: crypto.randomUUID(),
+                          name: type === 'aid' ? `Aid ${distKm.toFixed(1)}km` : `POI ${distKm.toFixed(1)}km`,
+                          distM, type,
+                          plannedStopMin: type === 'aid' ? 5 : 0,
+                        }]);
+                      }}
+                      onAddGelAt={advancedSettings.gelEnabled ? handleAddGelAt : undefined}
+                      onHoverDist={setHoverDistM}
+                      onMarkSelection={handleMarkSelection}
+                      onUpdateTerrain={handleUpdateTerrain}
+                      onRemoveTerrain={handleRemoveTerrain}
+                      results={results as CheckpointResult[]}
+                      gelResults={advancedSettings.gelInSchedule ? gelResults : []}
+                      showScheduleLabels={profileMode === 'chart'}
+                      onGelRemove={handleGelRemove}
+                      timeFormat={uiSettings.timeFormat}
+                      distUnit={uiSettings.distUnit}
+                    />
+                  </div>
+                  {results.length > 0 && profileMode === 'table' && (
+                    <>
+                      <div
+                        onMouseDown={e => { dragRef.current = { startY: e.clientY, startH: tableHeight, startH2: chartHeight, target: 'table' }; e.preventDefault(); }}
+                        style={{
+                          height: 8, background: 'var(--bg-elevated)',
+                          borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)',
+                          cursor: 'row-resize', flexShrink: 0,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}
+                      >
+                        <div style={{ width: 32, height: 2, background: 'var(--border)', borderRadius: 2 }} />
+                      </div>
+                      <div style={{ height: tableHeight, overflow: 'auto', padding: '0 16px 16px' }}>
+                        <PlanTable results={results as CheckpointResult[]} gelResults={advancedSettings.gelInSchedule ? gelResults : []} onAdjustStop={handleAdjustStop} timeFormat={uiSettings.timeFormat} distUnit={uiSettings.distUnit} />
+                      </div>
+                    </>
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* Drop zone when no route */}
+            {!route && (
+              <div
+                style={{ flex: 0, padding: '16px', display: 'flex', justifyContent: 'center' }}
+                onDragOver={e => e.preventDefault()}
+                onDrop={async e => {
+                  e.preventDefault();
+                  const file = e.dataTransfer.files[0];
+                  if (!file) return;
+                  const n = file.name.toLowerCase();
+                  try {
+                    const text = await file.text();
+                    if (n.endsWith('.gpx')) handleRouteLoad(parseRoute(text));
+                    else if (n.endsWith('.tppa') || n.endsWith('.tppe') || n.endsWith('.json')) handleLoadPlan(parseTopoPace(text));
+                  } catch { /* ignore */ }
+                }}
+              >
+                <span style={{ fontSize: 12, color: 'var(--text-hint)' }}>Drag a GPX or .tppa here to load</span>
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </main>
 
+      {/* Gel undo toast */}
       {removedGel && (
         <div style={{
           position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
@@ -537,13 +569,25 @@ export default function App() {
           borderRadius: 10, padding: '10px 18px',
           display: 'flex', alignItems: 'center', gap: 12,
           boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
-          fontSize: 13, zIndex: 9999,
-          whiteSpace: 'nowrap',
+          fontSize: 13, zIndex: 9999, whiteSpace: 'nowrap',
         }}>
           <span style={{ color: 'var(--text-secondary)' }}>Gel {removedGel.gelNumber} removed</span>
           <button className="primary" style={{ fontSize: 12, padding: '3px 12px' }} onClick={handleGelUndo}>Undo</button>
         </div>
       )}
+
+      {/* Trails modal */}
+      {trailsOpen && (
+        <TrailsModal
+          onClose={() => setTrailsOpen(false)}
+          onOpenTrail={handleLoadPlan}
+          onNewRoute={handleRouteLoad}
+          currentPlan={currentPlanData}
+        />
+      )}
+
+      {/* Tutorial overlay */}
+      {tutorialActive && <Tutorial onDone={() => setTutorialActive(false)} />}
     </div>
   );
 }

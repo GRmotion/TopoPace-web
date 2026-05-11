@@ -22,7 +22,7 @@ export default function AdvancedSettingsPanel({ settings, onChange }: Props) {
         style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', padding: 0, border: 'none', background: 'none', cursor: 'pointer', textAlign: 'left' }}
         onClick={() => setOpen(o => !o)}
       >
-        <label style={{ cursor: 'pointer' }}>Advanced Settings</label>
+        <label style={{ cursor: 'pointer' }}>Run Style</label>
         <span style={{ fontSize: 11, color: 'var(--text-hint)', display: 'inline-block', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 200ms' }}>▾</span>
       </button>
 

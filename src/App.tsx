@@ -329,6 +329,16 @@ export default function App() {
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
           {route && (
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
+              {autoSave && autoSaveStatus && (
+                <span style={{
+                  fontSize: 11,
+                  color: autoSaveStatus === 'saved' ? 'var(--green)' : 'var(--text-hint)',
+                  transition: 'color 200ms',
+                  letterSpacing: 0,
+                }}>
+                  {autoSaveStatus === 'saving' ? '↻ saving…' : '✓ saved'}
+                </span>
+              )}
               {editingName ? (
                 <input
                   autoFocus

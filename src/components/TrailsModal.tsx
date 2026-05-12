@@ -32,7 +32,7 @@ interface Props {
   autoSaveStatus: 'saving' | 'saved' | null;
 }
 
-export default function TrailsModal({ onClose, onOpenTrail, onNewRoute, currentPlan, autoSave, onAutoSaveChange, autoSaveStatus }: Props) {
+export default function TrailsModal({ onClose, onOpenTrail, onNewRoute, currentPlan, autoSave, onAutoSaveChange }: Props) {
   const [trails, setTrails] = useState<StoredTrail[]>(() => loadTrails());
   const [removedTrail, setRemovedTrail] = useState<StoredTrail | null>(null);
   const undoRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -126,18 +126,7 @@ export default function TrailsModal({ onClose, onOpenTrail, onNewRoute, currentP
       }}>
         {/* Header */}
         <div style={{ padding: '18px 20px 14px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontWeight: 700, fontSize: 16 }}>My Trails</span>
-            {autoSave && autoSaveStatus && (
-              <span style={{
-                fontSize: 11,
-                color: autoSaveStatus === 'saved' ? 'var(--green)' : 'var(--text-hint)',
-                transition: 'color 200ms',
-              }}>
-                {autoSaveStatus === 'saving' ? '↻ saving…' : '✓ saved'}
-              </span>
-            )}
-          </div>
+          <span style={{ fontWeight: 700, fontSize: 16 }}>My Trails</span>
           <button className="ghost" style={{ fontSize: 20, padding: '0 6px', lineHeight: 1 }} onClick={onClose}>×</button>
         </div>
 

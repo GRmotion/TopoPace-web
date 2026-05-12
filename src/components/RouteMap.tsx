@@ -354,7 +354,7 @@ export default function RouteMap({
     if (hoverFadeTimerRef.current) { clearTimeout(hoverFadeTimerRef.current); hoverFadeTimerRef.current = null; }
 
     if (hoverDistM == null || points.length === 0) {
-      const el = hoverMarkerRef.current?.getElement?.();
+      const el = hoverMarkerRef.current?.getElement?.() as HTMLElement | undefined;
       if (el && hoverMarkerRef.current) {
         el.style.opacity = '0';
         const m = hoverMarkerRef.current;
@@ -373,7 +373,7 @@ export default function RouteMap({
 
     if (hoverMarkerRef.current) {
       hoverMarkerRef.current.setLatLng(latlng);
-      const el = hoverMarkerRef.current.getElement?.();
+      const el = hoverMarkerRef.current.getElement?.() as HTMLElement | undefined;
       if (el) el.style.opacity = '1';
     } else {
       const marker = L.circleMarker(latlng, {
@@ -382,7 +382,7 @@ export default function RouteMap({
         className: 'lf-hover-dot',
       }).addTo(map);
       hoverMarkerRef.current = marker;
-      const el = marker.getElement?.();
+      const el = marker.getElement?.() as HTMLElement | undefined;
       if (el) {
         el.style.opacity = '0';
         requestAnimationFrame(() => requestAnimationFrame(() => { el.style.opacity = '1'; }));

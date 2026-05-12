@@ -262,6 +262,9 @@ export default function Tutorial({ onDone }: Props) {
               <span style={{ fontSize: 11, color: 'var(--text-hint)' }}>{step + 1} / {total}</span>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button className="ghost" style={{ fontSize: 12, padding: '5px 14px' }} onClick={skip}>Skip</button>
+                {step > 0 && (
+                  <button className="ghost" style={{ fontSize: 12, padding: '5px 14px' }} onClick={() => setStep(s => s - 1)}>←</button>
+                )}
                 <button className="primary" style={{ fontSize: 12, padding: '5px 18px' }} onClick={next}>
                   {step < STEPS.length - 2 ? 'Next' : 'Finish'}
                 </button>

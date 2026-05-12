@@ -78,7 +78,7 @@ export default function ElevationChart({
   const [w, setW] = useState(0);
   const [hover, setHover] = useState<{ km: number; ele: number } | null>(null);
   const [selection, setSelection] = useState<{ startKm: number; endKm: number } | null>(null);
-  const [pending, setPending] = useState<{ distM: number; x: number; y: number } | null>(null);
+  const [pending, setPending] = useState<{ distM: number; km: number; ele: number } | null>(null);
   const [gearPopup, setGearPopup] = useState<{
     id: string; clientX: number; clientY: number; inputVal: string;
   } | null>(null);
@@ -232,14 +232,12 @@ export default function ElevationChart({
       // Snap "+" to the elevation line at that km
       const km = dragRef.current.startKm;
       const nearest = bs(data, km);
-      const dotX = w > 0 ? kmToX(km) : ML;
-      const dotY = w > 0 ? eleToY(nearest.ele) : MT + plotH / 2;
       setSelection(null);
       setPendingMenuOpen(false);
       setPending({
         distM: km * 1000,
-        x: Math.max(ML + 15, Math.min(ML + plotW - 15, dotX)),
-        y: Math.max(MT + 15, Math.min(MT + plotH - 20, dotY)),
+        km,
+        ele: nearest.ele,
       });
     }
     dragRef.current = null;
@@ -555,13 +553,15 @@ export default function ElevationChart({
 
       {/* "+" button — hover reveals options panel; options are inline (no gap) so mouse stays in container */}
       {pending && (onClickDist || onClickDistTyped || onAddGelAt) && (() => {
-        const flipLeft = pending.x > w - 260;
+        const px = Math.max(ML + 15, Math.min(ML + plotW - 15, kmToX(pending.km)));
+        const py = Math.max(MT + 15, Math.min(MT + plotH - 20, eleToY(pending.ele)));
+        const flipLeft = px > w - 260;
         return (
           <div
             style={{
               position: 'absolute',
-              top: pending.y,
-              left: flipLeft ? pending.x + 13 : pending.x - 13,
+              top: py,
+              left: flipLeft ? px + 13 : px - 13,
               transform: flipLeft ? 'translate(-100%, -50%)' : 'translateY(-50%)',
               zIndex: 20,
               display: 'flex',

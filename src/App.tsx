@@ -369,6 +369,14 @@ export default function App() {
                       ))}
                     </div>
                   </div>
+                  <div>
+                    <div style={{ color: 'var(--text-secondary)', marginBottom: 5, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Tutorial</div>
+                    <button
+                      className="ghost"
+                      style={{ width: '100%', fontSize: 11, padding: '3px 0' }}
+                      onClick={() => { localStorage.removeItem(TUTORIAL_DONE_KEY); setTutorialActive(true); setSettingsOpen(false); }}
+                    >Start tutorial</button>
+                  </div>
                 </div>
               </>
             )}

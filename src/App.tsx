@@ -79,6 +79,9 @@ export default function App() {
   }, [uiSettings]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsBtnRef = useRef<HTMLButtonElement>(null);
+  const [mapStyle, setMapStyle] = useState<'osm' | 'topo' | 'satellite'>('osm');
+  const [lineMode, setLineMode] = useState<'solid' | 'elevation' | 'speed' | 'terrain'>('solid');
+  const [lineColor, setLineColor] = useState('#ffd54f');
   const chartWrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -214,12 +217,18 @@ export default function App() {
     ));
   }, []);
 
+  const [conflictTerrainIds, setConflictTerrainIds] = useState<Set<string>>(new Set());
+
   const handleMarkSelection = useCallback((startKm: number, endKm: number) => {
-    setTerrainSegs(prev => [...prev, {
-      id: crypto.randomUUID(),
-      startKm, endKm,
-      difficultyPercent: 0,
-    }]);
+    setTerrainSegs(prev => {
+      const overlapping = prev.filter(t => startKm < t.endKm && endKm > t.startKm);
+      if (overlapping.length > 0) {
+        setConflictTerrainIds(new Set(overlapping.map(t => t.id)));
+        setTimeout(() => setConflictTerrainIds(new Set()), 1600);
+        return prev;
+      }
+      return [...prev, { id: crypto.randomUUID(), startKm, endKm, difficultyPercent: 0 }];
+    });
   }, []);
 
   const handleUpdateTerrain = useCallback((id: string, difficultyPercent: number) => {
@@ -503,7 +512,60 @@ export default function App() {
                 hoverDistM={hoverDistM}
                 defaultCenter={defaultMapCenter}
                 defaultZoom={10}
+                mapStyle={mapStyle}
+                lineMode={lineMode}
+                lineColor={lineColor}
+                planSegments={segments}
+                terrainSegments={route ? terrainSegs : []}
               />
+              {route && (
+                <div className="anim-pop" style={{
+                  position: 'absolute', top: 8, right: 8, zIndex: 1001,
+                  background: 'var(--bg-card)', border: '1px solid var(--border)',
+                  borderRadius: 10, padding: '8px 10px',
+                  boxShadow: '0 2px 12px rgba(0,0,0,0.45)',
+                  display: 'flex', flexDirection: 'column', gap: 8, minWidth: 110,
+                }}>
+                  {/* Map style */}
+                  <div>
+                    <div style={{ fontSize: 10, color: 'var(--text-hint)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Map</div>
+                    <div style={{ display: 'flex', gap: 3 }}>
+                      {(['osm', 'topo', 'satellite'] as const).map(s => (
+                        <button key={s} className={mapStyle === s ? 'primary' : 'ghost'}
+                          style={{ fontSize: 10, padding: '2px 5px', flex: 1 }}
+                          onClick={() => setMapStyle(s)}>
+                          {s === 'osm' ? 'Str' : s === 'topo' ? 'Tpo' : 'Sat'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Line color */}
+                  <div>
+                    <div style={{ fontSize: 10, color: 'var(--text-hint)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Line</div>
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 4 }}>
+                      {['#ffd54f', '#4caf50', '#2196f3', '#f44336', '#ffffff', '#e040fb'].map(c => (
+                        <div key={c} onClick={() => { setLineMode('solid'); setLineColor(c); }}
+                          style={{
+                            width: 14, height: 14, borderRadius: '50%', background: c, cursor: 'pointer',
+                            outline: lineMode === 'solid' && lineColor === c ? '2px solid var(--green)' : '2px solid transparent',
+                            outlineOffset: 1,
+                          }} />
+                      ))}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      {([
+                        { mode: 'elevation', label: '↑ Elevation' },
+                        { mode: 'speed',     label: '⚡ Speed' },
+                        { mode: 'terrain',   label: '◼ Terrain' },
+                      ] as const).map(({ mode, label }) => (
+                        <button key={mode} className={lineMode === mode ? 'primary' : 'ghost'}
+                          style={{ fontSize: 10, padding: '2px 6px', textAlign: 'left' }}
+                          onClick={() => setLineMode(mode)}>{label}</button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {route && (
@@ -567,6 +629,7 @@ export default function App() {
                       onGelRemove={handleGelRemove}
                       timeFormat={uiSettings.timeFormat}
                       distUnit={uiSettings.distUnit}
+                      conflictTerrainIds={conflictTerrainIds}
                     />
                   </div>
                   {results.length > 0 && profileMode === 'table' && (

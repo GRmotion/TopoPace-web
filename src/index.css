@@ -99,6 +99,15 @@ input[type=number].no-spinners { -moz-appearance: textfield; }
   transform-origin: left center;
 }
 
+@keyframes terrainFlash {
+  0%, 100% { opacity: 0; }
+  30%, 70%  { opacity: 0.65; }
+}
+.terrain-conflict-flash {
+  animation: terrainFlash 500ms ease-in-out 3;
+  pointer-events: none;
+}
+
 @keyframes tutSelExpand {
   0%   { transform: scaleX(0); opacity: 1; animation-timing-function: cubic-bezier(0.3,0,0,1); }
   33%  { transform: scaleX(1); opacity: 1; animation-timing-function: linear; }

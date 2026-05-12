@@ -155,7 +155,7 @@ export default function GoalTimeForm({
 
       {hasDist && (
         <div style={row}>
-          <label style={{ whiteSpace: 'nowrap', color: 'var(--text-secondary)', fontSize: 12 }}>Avg pace</label>
+          <label style={{ whiteSpace: 'nowrap', color: 'var(--text-secondary)', fontSize: 12 }} title="Grade Adjusted Pace — elevation-equivalent flat pace (NAIS: 1 m gain ≈ 6 m flat)">avg GAP</label>
           <input
             type="text"
             value={paceStr}

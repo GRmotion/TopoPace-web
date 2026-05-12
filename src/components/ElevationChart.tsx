@@ -28,6 +28,7 @@ interface Props {
   showScheduleLabels?: boolean;
   timeFormat?: '12h' | '24h';
   distUnit?: 'km' | 'mi';
+  conflictTerrainIds?: Set<string>;
 }
 
 interface DPt { km: number; ele: number; }
@@ -69,7 +70,7 @@ export default function ElevationChart({
   terrainSegments, gelZones, onGelZonesChange, onGelRemove, onClickDist, onClickDistTyped, onAddGelAt, onHoverDist,
   onMarkSelection, onUpdateTerrain, onRemoveTerrain,
   results, gelResults, showScheduleLabels,
-  timeFormat = '24h', distUnit = 'km',
+  timeFormat = '24h', distUnit = 'km', conflictTerrainIds,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -371,6 +372,16 @@ export default function ElevationChart({
               stroke={terrainStroke(t.difficultyPercent)}
               strokeWidth={1.5}
               clipPath="url(#pc)" />
+          );
+        })}
+
+        {/* Conflict flash overlay */}
+        {w > 0 && conflictTerrainIds && terrainSegments?.filter(t => conflictTerrainIds.has(t.id)).map(t => {
+          const x1 = kmToX(t.startKm), x2 = kmToX(t.endKm);
+          return (
+            <rect key={`cf-${t.id}`} x={x1} y={MT} width={Math.max(0, x2 - x1)} height={plotH}
+              fill="rgba(244,67,54,0.55)" clipPath="url(#pc)"
+              className="terrain-conflict-flash" />
           );
         })}
 

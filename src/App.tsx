@@ -572,9 +572,10 @@ export default function App() {
               {route && (
                 <div
                   style={{
-                    position: 'absolute', top: 0, right: 0, zIndex: 1001,
-                    width: 600, height: 800,
-                    pointerEvents: 'all',
+                    position: 'absolute', top: 8, right: 8, zIndex: 1001,
+                    background: 'var(--bg-card)', border: '1px solid var(--border)',
+                    borderRadius: 10,
+                    boxShadow: '0 2px 12px rgba(0,0,0,0.45)',
                   }}
                   onMouseEnter={() => {
                     if (mapPanelLeaveTimerRef.current) clearTimeout(mapPanelLeaveTimerRef.current);
@@ -582,14 +583,6 @@ export default function App() {
                   }}
                   onMouseLeave={() => {
                     mapPanelLeaveTimerRef.current = setTimeout(() => setMapPanelExpanded(false), 200);
-                  }}
-                >
-                <div
-                  style={{
-                    position: 'absolute', top: 8, right: 8,
-                    background: 'var(--bg-card)', border: '1px solid var(--border)',
-                    borderRadius: 10,
-                    boxShadow: '0 2px 12px rgba(0,0,0,0.45)',
                   }}
                 >
                   {mapPanelExpanded ? (
@@ -658,6 +651,8 @@ export default function App() {
                     </div>
                   ) : (
                     <div style={{ padding: '6px 10px', display: 'flex', gap: 6, alignItems: 'center', cursor: 'default' }}>
+                      <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>⚙</span>
+                      <span style={{ color: 'var(--border)' }}>|</span>
                       <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>
                         {mapStyle === 'osm' ? 'Str' : mapStyle === 'topo' ? 'Tpo' : 'Sat'}
                       </span>
@@ -668,7 +663,6 @@ export default function App() {
                       </span>
                     </div>
                   )}
-                </div>
                 </div>
               )}
             </div>

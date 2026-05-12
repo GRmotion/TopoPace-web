@@ -119,3 +119,10 @@ input[type=number].no-spinners { -moz-appearance: textfield; }
   pointer-events: none;
 }
 
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-elevated); border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: var(--green); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--green-bright); }
+* { scrollbar-color: var(--green) var(--bg-elevated); scrollbar-width: thin; }
+

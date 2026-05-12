@@ -98,3 +98,75 @@ input[type=number].no-spinners { -moz-appearance: textfield; }
   animation: popIn 220ms cubic-bezier(0.3, 0, 0, 1) both;
   transform-origin: left center;
 }
+
+@keyframes tutSelExpand {
+  0%   { transform: scaleX(0); opacity: 1; animation-timing-function: cubic-bezier(0.3,0,0,1); }
+  33%  { transform: scaleX(1); opacity: 1; animation-timing-function: linear; }
+  67%  { transform: scaleX(1); opacity: 1; animation-timing-function: ease-in; }
+  84%  { transform: scaleX(1); opacity: 0; animation-timing-function: linear; }
+  100% { transform: scaleX(0); opacity: 0; }
+}
+@keyframes tutInfoShow {
+  0%   { opacity: 0; transform: translateX(-50%) translateY(4px); }
+  23%  { opacity: 0; transform: translateX(-50%) translateY(4px); animation-timing-function: cubic-bezier(0.3,0,0,1); }
+  38%  { opacity: 1; transform: translateX(-50%) translateY(0);   animation-timing-function: linear; }
+  67%  { opacity: 1; transform: translateX(-50%) translateY(0);   animation-timing-function: ease-in; }
+  80%  { opacity: 0; transform: translateX(-50%) translateY(0); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(4px); }
+}
+@keyframes tutPlusShow {
+  0%   { opacity: 0; }
+  27%  { opacity: 0; animation-timing-function: cubic-bezier(0.3,0,0,1); }
+  40%  { opacity: 1; }
+  67%  { opacity: 1; animation-timing-function: ease-in; }
+  80%  { opacity: 0; }
+  100% { opacity: 0; }
+}
+
+.tutorial-sim-sel {
+  position: absolute;
+  left: calc(50px + (100% - 64px) * 0.5);
+  top: 10px;
+  bottom: 36px;
+  width: calc((100% - 64px) * 0.07);
+  transform-origin: left center;
+  background: rgba(255,213,79,0.18);
+  border-left: 1.5px solid #ffd54f;
+  border-right: 1.5px solid #ffd54f;
+  animation: tutSelExpand 3s linear infinite;
+  pointer-events: none;
+}
+.tutorial-sim-info {
+  position: absolute;
+  bottom: 36px;
+  left: 50%;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 5px 10px;
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: nowrap;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,.4);
+  animation: tutInfoShow 3s linear infinite;
+  pointer-events: none;
+}
+.tutorial-sim-plus {
+  position: absolute;
+  top: 12px;
+  left: calc(50px + (100% - 64px) * 0.5);
+  background: rgba(0,0,0,0.55);
+  color: #fff;
+  border: 1.5px solid transparent;
+  border-radius: 3px;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.5;
+  padding: 0 4px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.35);
+  animation: tutPlusShow 3s linear infinite;
+  pointer-events: none;
+}

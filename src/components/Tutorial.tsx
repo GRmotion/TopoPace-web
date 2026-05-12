@@ -147,6 +147,8 @@ export default function Tutorial({ onDone }: Props) {
     else { localStorage.setItem(TUTORIAL_DONE_KEY, '1'); onDone(); }
   }
 
+  const isSimStep = !isEnd && (current.id === 'selection' || current.id === 'terrain');
+
   // Tooltip placement logic
   const PAD = 16;
   const TW = 280;
@@ -226,6 +228,29 @@ export default function Tutorial({ onDone }: Props) {
 
       {/* Arrow */}
       {rect && !isEnd && <div style={{ ...arrowStyle, zIndex: 4003, pointerEvents: 'none' }} />}
+
+      {/* Simulation overlay — selection/terrain steps */}
+      {isSimStep && rect && (
+        <div style={{
+          position: 'fixed',
+          top: rect.top, left: rect.left,
+          width: rect.width, height: rect.height,
+          zIndex: 4002,
+          pointerEvents: 'none',
+          overflow: 'hidden',
+        }}>
+          <div className="tutorial-sim-sel" />
+          <div className="tutorial-sim-info">
+            <span style={{ color: 'var(--text-secondary)' }}>25.0–31.5 km</span>
+            <strong>6.5 km</strong>
+            <span>5:45<span style={{ color: 'var(--text-hint)', marginLeft: 2 }}>/km avg</span></span>
+            <span style={{ color: 'var(--yellow)', fontWeight: 600 }}>0:37:22</span>
+            <span style={{ color: 'var(--green)', fontWeight: 600 }}>↗320m</span>
+            <span style={{ color: '#e57373', fontWeight: 600 }}>↘85m</span>
+          </div>
+          {current.id === 'terrain' && <div className="tutorial-sim-plus">+</div>}
+        </div>
+      )}
 
       {/* Tooltip */}
       <div className="anim-pop" style={{

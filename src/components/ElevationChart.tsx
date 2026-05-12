@@ -13,11 +13,13 @@ interface Props {
   raceStartTime?: string;
   height?: number;
   terrainSegments?: TerrainSegment[];
+  hoverDistM?: number | null;
   onClickDist?: (distM: number) => void;
   onHoverDist?: (distM: number | null) => void;
   onMarkSelection?: (startKm: number, endKm: number) => void;
   onUpdateTerrain?: (id: string, difficultyPercent: number) => void;
   onRemoveTerrain?: (id: string) => void;
+  onMoveCheckpoint?: (id: string, distM: number) => void;
   gelZones?: GelZone[];
   onGelZonesChange?: (zones: GelZone[]) => void;
   onGelRemove?: (id: string) => void;
@@ -68,7 +70,8 @@ function terrainStroke(pct: number): string {
 export default function ElevationChart({
   points, checkpoints, segments, raceStartTime, height = 200,
   terrainSegments, gelZones, onGelZonesChange, onGelRemove, onClickDist, onClickDistTyped, onAddGelAt, onHoverDist,
-  onMarkSelection, onUpdateTerrain, onRemoveTerrain,
+  hoverDistM,
+  onMarkSelection, onUpdateTerrain, onRemoveTerrain, onMoveCheckpoint,
   results, gelResults, showScheduleLabels,
   timeFormat = '24h', distUnit = 'km', conflictTerrainIds,
 }: Props) {
@@ -85,6 +88,7 @@ export default function ElevationChart({
   } | null>(null);
   const [activeTerrainId, setActiveTerrainId] = useState<string | null>(null);
   const [draggingGelId, setDraggingGelId] = useState<string | null>(null);
+  const [draggingCpId, setDraggingCpId] = useState<string | null>(null);
   const [pendingMenuOpen, setPendingMenuOpen] = useState(false);
 
   useLayoutEffect(() => {
@@ -121,8 +125,8 @@ export default function ElevationChart({
   const plotH = Math.max(1, height - MT - MB);
 
   const kmToX = (km: number) => ML + ((km - minKm) / kmSpan) * plotW;
-  // In profile mode reserve top 22px for numbered badge circles so they don't overlap the line
-  const badgeH = showScheduleLabels ? 22 : 0;
+  // Reserve top space: row 1 (terrain badges, 22px) + row 2 (cp circles, 22px) = 44px
+  const badgeH = showScheduleLabels ? 44 : 0;
   const eleToY = (ele: number) => MT + badgeH + (1 - (ele - minEle) / eleRange) * (plotH - badgeH);
 
   // --- Strip layout (computed in render scope so kmToX is available) ---
@@ -186,7 +190,7 @@ export default function ElevationChart({
     const { x } = getSvgXY(e);
     const km = svgXToKm(x);
     if (km == null) {
-      if (!dragRef.current && !draggingGelId) { setHover(null); onHoverDist?.(null); }
+      if (!dragRef.current && !draggingGelId && !draggingCpId) { setHover(null); onHoverDist?.(null); }
       return;
     }
     const nearest = bs(data, km);
@@ -197,6 +201,11 @@ export default function ElevationChart({
       onGelZonesChange(gelZones.map(z => z.id === draggingGelId ? { ...z, centerKm: clamped } : z));
       return;
     }
+    if (draggingCpId && onMoveCheckpoint) {
+      const clamped = Math.max(data[0].km, Math.min(data[data.length - 1].km, km));
+      onMoveCheckpoint(draggingCpId, clamped * 1000);
+      return;
+    }
     if (dragRef.current) {
       const a = Math.min(dragRef.current.startKm, km);
       const b = Math.max(dragRef.current.startKm, km);
@@ -205,8 +214,9 @@ export default function ElevationChart({
   }
 
   function onLeave() {
-    if (!dragRef.current && !draggingGelId) { setHover(null); onHoverDist?.(null); }
+    if (!dragRef.current && !draggingGelId && !draggingCpId) { setHover(null); onHoverDist?.(null); }
     if (draggingGelId) setDraggingGelId(null);
+    if (draggingCpId) setDraggingCpId(null);
   }
 
   function onDown(e: React.MouseEvent<SVGSVGElement>) {
@@ -226,6 +236,7 @@ export default function ElevationChart({
   }
 
   function onUp(e: React.MouseEvent<SVGSVGElement>) {
+    if (draggingCpId) { setDraggingCpId(null); return; }
     if (draggingGelId) { setDraggingGelId(null); return; }
     if (!dragRef.current) return;
     const dx = Math.abs(e.clientX - dragRef.current.startClientX);
@@ -309,6 +320,12 @@ export default function ElevationChart({
   const hx = hover && w > 0 ? kmToX(hover.km) : 0;
   const hy = hover && w > 0 ? eleToY(hover.ele) : 0;
 
+  // External hover from map — shown only when no internal hover
+  const extHoverPt = !hover && hoverDistM != null && data.length > 0
+    ? bs(data, hoverDistM / 1000) : null;
+  const ehx = extHoverPt && w > 0 ? kmToX(extHoverPt.km) : 0;
+  const ehy = extHoverPt && w > 0 ? eleToY(extHoverPt.ele) : 0;
+
   function applyGear() {
     if (!gearPopup) return;
     const pct = parseFloat(gearPopup.inputVal);
@@ -322,7 +339,7 @@ export default function ElevationChart({
         ref={svgRef}
         width="100%"
         height={totalSvgH}
-        style={{ display: 'block', cursor: (onClickDist || onClickDistTyped) ? 'crosshair' : 'default' }}
+        style={{ display: 'block', cursor: draggingCpId ? 'ew-resize' : (onClickDist || onClickDistTyped) ? 'crosshair' : 'default' }}
         onMouseMove={onMove}
         onMouseLeave={onLeave}
         onMouseDown={onDown}
@@ -404,19 +421,33 @@ export default function ElevationChart({
 
           return checkpoints.map(cp => {
             const x = w > 0 ? kmToX(cp.distM / 1000) : 0;
-            const col = cp.type === 'aid' ? (cp.color || '#ffd54f') : '#8b8fa8';
+            const col = cp.color || (cp.type === 'aid' ? '#ffd54f' : '#8b8fa8');
             const num = cpIdxMap.get(cp.id) ?? fallbackIdx.get(cp.id) ?? 1;
             return (
               <g key={cp.id}>
-                <line x1={x} y1={MT} x2={x} y2={MT + plotH}
+                {/* Line starts from bottom of circle in schedule mode, not above it */}
+                <line x1={x} y1={showScheduleLabels ? MT + 42 : MT} x2={x} y2={MT + plotH}
                   stroke={col} strokeWidth={1.5}
                   strokeDasharray={showScheduleLabels ? '4,3' : undefined}
                   clipPath="url(#pc)" />
                 {showScheduleLabels ? (
                   <>
-                    <circle cx={x} cy={MT + 9} r={9} fill={col} clipPath="url(#pc)" />
-                    <text x={x} y={MT + 13} textAnchor="middle" fill="#000"
-                      fontSize={9} fontWeight="700" clipPath="url(#pc)">{num}</text>
+                    {cp.type === 'aid' ? (
+                      <circle cx={x} cy={MT + 33} r={9} fill={col} clipPath="url(#pc)"
+                        style={{ pointerEvents: 'none' }}
+                      />
+                    ) : (
+                      /* POI: rounded triangle, circumradius≈11 → optically similar to r=9 circle */
+                      <path
+                        d={`M${x - 1.5} ${MT + 26.6} Q${x} ${MT + 24} ${x + 1.5} ${MT + 26.6} L${x + 8} ${MT + 37.9} Q${x + 9.5} ${MT + 40.5} ${x + 6.5} ${MT + 40.5} L${x - 6.5} ${MT + 40.5} Q${x - 9.5} ${MT + 40.5} ${x - 8} ${MT + 37.9} Z`}
+                        fill={col} clipPath="url(#pc)"
+                        style={{ pointerEvents: 'none' }}
+                      />
+                    )}
+                    <text x={x} y={MT + 36} textAnchor="middle" fill="#000"
+                      fontSize={9} fontWeight="700" clipPath="url(#pc)"
+                      style={{ pointerEvents: 'none' }}
+                    >{num}</text>
                   </>
                 ) : (
                   <text x={x + 3} y={MT + 11} fill={col} fontSize={10} clipPath="url(#pc)">{cp.name}</text>
@@ -436,6 +467,15 @@ export default function ElevationChart({
             <line x1={hx} y1={MT} x2={hx} y2={MT + plotH}
               stroke="rgba(255,255,255,0.25)" strokeWidth={1} />
             <circle cx={hx} cy={hy} r={4} fill="#4caf50" stroke="#fff" strokeWidth={2} />
+          </>
+        )}
+
+        {/* External hover dot (from map) */}
+        {extHoverPt && w > 0 && (
+          <>
+            <line x1={ehx} y1={MT} x2={ehx} y2={MT + plotH}
+              stroke="rgba(255,255,255,0.25)" strokeWidth={1} />
+            <circle cx={ehx} cy={ehy} r={4} fill="#4caf50" stroke="#fff" strokeWidth={2} />
           </>
         )}
 
@@ -472,13 +512,16 @@ export default function ElevationChart({
               const isGel = item.kind === 'gel';
               const col = isGel
                 ? '#ff9800'
-                : (item.data as CheckpointResult).type === 'aid'
-                  ? ((item.data as CheckpointResult).color || '#ffd54f')
-                  : '#8b8fa8';
+                : (item.data as CheckpointResult).color
+                  || ((item.data as CheckpointResult).type === 'aid' ? '#ffd54f' : '#8b8fa8');
               const badgeR = isGel ? 5 : 8;
               // Clamp badge so it stays inside chart x-bounds
               const bx = Math.max(ML + badgeR + 2, Math.min(ML + plotW - badgeR - 2, x));
 
+              // Flip label left when badge is near the right edge
+              const nearRight = bx > ML + plotW - 64;
+              const labelAnchor = nearRight ? 'end' : 'start';
+              const labelX = nearRight ? bx - badgeR - 4 : bx + badgeR + 4;
               return (
                 <g key={`strip-${item.data.id}`}>
                   <line x1={x} y1={baseY} x2={x} y2={baseY + topY}
@@ -486,37 +529,49 @@ export default function ElevationChart({
                   {isGel ? (
                     <>
                       <circle cx={bx} cy={baseY + topY + badgeR} r={badgeR} fill={col} />
-                      <text x={bx + badgeR + 4} y={baseY + topY + 9}
+                      <text x={labelX} y={baseY + topY + 9} textAnchor={labelAnchor}
                         fontSize={9} fill={col} fontWeight="600" fontFamily="Arial,sans-serif">
                         {'Gel ' + (item.data as GelResult).gelNumber}
                       </text>
-                      <text x={bx + badgeR + 4} y={baseY + topY + 23}
+                      <text x={labelX} y={baseY + topY + 23} textAnchor={labelAnchor}
                         fontSize={12} fill={col} fontWeight="700" fontFamily="Arial,sans-serif">
                         {formatTime(item.data.etaMs, timeFormat)}
                       </text>
                     </>
                   ) : (
                     <>
-                      <circle cx={bx} cy={baseY + topY + badgeR} r={badgeR} fill={col} />
+                      {(() => {
+                        const isAidBadge = (item.data as CheckpointResult).type === 'aid';
+                        const cy = baseY + topY + badgeR;
+                        return isAidBadge ? (
+                          <circle cx={bx} cy={cy} r={badgeR} fill={col} />
+                        ) : (
+                          <path
+                            d={`M${bx-1.3} ${cy-5.7} Q${bx} ${cy-8} ${bx+1.3} ${cy-5.7} L${bx+7.1} ${cy+4.4} Q${bx+8.4} ${cy+6.7} ${bx+5.8} ${cy+6.7} L${bx-5.8} ${cy+6.7} Q${bx-8.4} ${cy+6.7} ${bx-7.1} ${cy+4.4} Z`}
+                            fill={col}
+                          />
+                        );
+                      })()}
                       <text x={bx} y={baseY + topY + badgeR + 4}
                         textAnchor="middle" fontSize={9} fill="#000" fontWeight="800"
                         fontFamily="Arial,sans-serif">
                         {(item as { kind: 'cp'; cpIdx: number }).cpIdx}
                       </text>
-                      <text x={bx + badgeR + 4} y={baseY + topY + 11}
+                      <text x={labelX} y={baseY + topY + 11} textAnchor={labelAnchor}
                         fontSize={9} fill="var(--text-secondary)" fontFamily="Arial,sans-serif">
                         {(item.data.name ?? '').length > 12
                           ? item.data.name.slice(0, 11) + '…'
                           : item.data.name}
                       </text>
-                      <text x={bx + badgeR + 4} y={baseY + topY + 26}
+                      <text x={labelX} y={baseY + topY + 26} textAnchor={labelAnchor}
                         fontSize={13} fill="var(--text)" fontWeight="700"
                         fontFamily="Arial,sans-serif">
                         {formatTime(item.data.etaMs, timeFormat)}
                       </text>
                       {(item.data as CheckpointResult).type === 'aid' &&
                        (item.data as CheckpointResult).plannedStopMin > 0 && (
-                        <text x={bx + badgeR + 50} y={baseY + topY + 26}
+                        <text x={nearRight ? labelX - 46 : labelX + 46} y={baseY + topY + 26}
+                          textAnchor={labelAnchor}
                           fontSize={9} fill="var(--text-hint)" fontFamily="Arial,sans-serif">
                           {'+' + (item.data as CheckpointResult).plannedStopMin + 'm'}
                         </text>
@@ -528,6 +583,19 @@ export default function ElevationChart({
             })}
           </>
         )}
+
+        {/* Checkpoint hit areas — rendered last, on top of all axis overlays, so events fire reliably */}
+        {showScheduleLabels && onMoveCheckpoint && w > 0 && checkpoints.map(cp => {
+          const x = kmToX(cp.distM / 1000);
+          return (
+            <circle key={`cp-hit-${cp.id}`}
+              cx={x} cy={MT + 33} r={18}
+              fill="rgba(0,0,0,0)"
+              style={{ cursor: 'ew-resize', pointerEvents: 'all' }}
+              onMouseDown={e => { e.stopPropagation(); setDraggingCpId(cp.id); }}
+            />
+          );
+        })}
 
         {/* Gel handles — rendered last so they're always on top */}
         {w > 0 && gelZones?.map(zone => {

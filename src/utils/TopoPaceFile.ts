@@ -17,6 +17,12 @@ export interface TopoPaceFileData {
   gelZones: GelZone[];
   advancedSettings: AdvancedSettings;
   calibration?: CalibrationResult[];
+  mapView?: {
+    mapStyle: 'osm' | 'topo' | 'satellite';
+    lineMode: 'solid' | 'elevation' | 'speed';
+    lineColor: string;
+    terrainOverlay: boolean;
+  };
 }
 
 export function serializeTopoPace(data: Omit<TopoPaceFileData, 'version' | 'savedAt'>): string {

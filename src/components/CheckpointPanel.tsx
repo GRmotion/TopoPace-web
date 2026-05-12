@@ -84,56 +84,59 @@ export default function CheckpointPanel({ checkpoints, totalDistM, onChange }: P
           style={{ background: 'var(--bg-elevated)', borderRadius: 8, overflow: 'visible' }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', position: 'relative' }}>
-            {cp.type === 'aid' ? (
-              /* Color dot — hover triggers swatch palette */
-              <div
-                style={{ position: 'relative', flexShrink: 0 }}
-                onMouseEnter={() => showColor(cp.id)}
-                onMouseLeave={hideColor}
-              >
+            {/* Color icon — circle for Aid, rounded triangle for POI — hover shows swatch */}
+            <div
+              style={{ position: 'relative', flexShrink: 0, width: 16, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              onMouseEnter={() => showColor(cp.id)}
+              onMouseLeave={hideColor}
+            >
+              {cp.type === 'aid' ? (
                 <span style={{
                   display: 'inline-block', width: 12, height: 12, borderRadius: '50%',
                   background: cp.color || '#ffd54f',
                   boxShadow: '0 0 0 1.5px rgba(0,0,0,0.3)',
                   cursor: 'pointer',
                 }} />
-                {colorHoverId === cp.id && (
-                  <div
-                    className="anim-pop"
-                    onMouseEnter={() => showColor(cp.id)}
-                    onMouseLeave={hideColor}
-                    style={{
-                      position: 'absolute',
-                      top: '50%', left: 18,
-                      transform: 'translateY(-50%)',
-                      transformOrigin: 'left center',
-                      display: 'flex', gap: 5, alignItems: 'center',
-                      background: 'var(--bg-card)',
-                      border: '1px solid var(--border)',
-                      borderRadius: 8, padding: '5px 8px',
-                      zIndex: 50,
-                      boxShadow: '0 3px 12px rgba(0,0,0,0.45)',
-                      whiteSpace: 'nowrap',
-                    }}>
-                    {AID_COLORS.map(color => (
-                      <button
-                        key={color}
-                        onClick={() => { onChange(checkpoints.map(c => c.id === cp.id ? { ...c, color } : c)); setColorHoverId(null); }}
-                        style={{
-                          width: 16, height: 16, borderRadius: '50%', background: color, border: 'none',
-                          cursor: 'pointer', padding: 0, flexShrink: 0,
-                          outline: (cp.color || '#ffd54f') === color ? '2.5px solid #fff' : 'none',
-                          outlineOffset: 1,
-                          boxShadow: '0 0 0 1px rgba(0,0,0,0.35)',
-                        }}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <span style={{ fontSize: 13, flexShrink: 0 }}>📍</span>
-            )}
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 14 14" style={{ display: 'block', cursor: 'pointer' }}
+                  fill={cp.color || '#8b8fa8'}>
+                  <path d="M5.4 5.1 Q7 2.5 8.6 5.1 L10.9 9 Q12.5 11.5 9.5 11.5 L4.5 11.5 Q1.5 11.5 3.1 9 Z" />
+                </svg>
+              )}
+              {colorHoverId === cp.id && (
+                <div
+                  className="anim-pop"
+                  onMouseEnter={() => showColor(cp.id)}
+                  onMouseLeave={hideColor}
+                  style={{
+                    position: 'absolute',
+                    top: '50%', left: 18,
+                    transform: 'translateY(-50%)',
+                    transformOrigin: 'left center',
+                    display: 'flex', gap: 5, alignItems: 'center',
+                    background: 'var(--bg-card)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 8, padding: '5px 8px',
+                    zIndex: 50,
+                    boxShadow: '0 3px 12px rgba(0,0,0,0.45)',
+                    whiteSpace: 'nowrap',
+                  }}>
+                  {AID_COLORS.map(color => (
+                    <button
+                      key={color}
+                      onClick={() => { onChange(checkpoints.map(c => c.id === cp.id ? { ...c, color } : c)); setColorHoverId(null); }}
+                      style={{
+                        width: 16, height: 16, borderRadius: '50%', background: color, border: 'none',
+                        cursor: 'pointer', padding: 0, flexShrink: 0,
+                        outline: (cp.color || (cp.type === 'aid' ? '#ffd54f' : '#8b8fa8')) === color ? '2.5px solid #fff' : 'none',
+                        outlineOffset: 1,
+                        boxShadow: '0 0 0 1px rgba(0,0,0,0.35)',
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cp.name || '—'}</div>
               <div style={{ color: 'var(--text-secondary)', fontSize: 11 }}>
@@ -157,7 +160,27 @@ interface EditorProps { cp: Checkpoint; totalDistM: number; onSave: (cp: Checkpo
 
 function CheckpointEditor({ cp: initial, totalDistM, onSave, onCancel }: EditorProps) {
   const [cp, setCp] = useState<Checkpoint>(initial);
+  const [distStr, setDistStr] = useState(() => String(initial.distM / 1000));
   function set<K extends keyof Checkpoint>(key: K, value: Checkpoint[K]) { setCp(prev => ({ ...prev, [key]: value })); }
+
+  function commitDist(str: string) {
+    const v = parseFloat(str);
+    if (!isNaN(v) && v >= 0) {
+      const clamped = Math.min(totalDistM, Math.max(0, v * 1000));
+      set('distM', clamped);
+      setDistStr(String(clamped / 1000));
+    } else {
+      setDistStr(String(cp.distM / 1000));
+    }
+  }
+
+  function handleSave() {
+    const v = parseFloat(distStr);
+    const finalDistM = !isNaN(v) && v >= 0
+      ? Math.min(totalDistM, Math.max(0, v * 1000))
+      : cp.distM;
+    onSave({ ...cp, distM: finalDistM });
+  }
 
   return (
     <div style={{ background: 'var(--bg)', border: '1px solid var(--green)', borderRadius: 10, padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -172,9 +195,14 @@ function CheckpointEditor({ cp: initial, totalDistM, onSave, onCancel }: EditorP
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         <label>Distance (km)</label>
-        <input type="number" min={0} max={totalDistM / 1000} step={0.1}
-          value={(cp.distM / 1000).toFixed(2)}
-          onChange={e => set('distM', parseFloat(e.target.value) * 1000)} />
+        <input
+          type="text"
+          inputMode="decimal"
+          value={distStr}
+          onChange={e => setDistStr(e.target.value)}
+          onBlur={() => commitDist(distStr)}
+          onKeyDown={e => { if (e.key === 'Enter') commitDist(distStr); }}
+        />
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -210,7 +238,7 @@ function CheckpointEditor({ cp: initial, totalDistM, onSave, onCancel }: EditorP
 
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
         <button className="ghost" onClick={onCancel}>Cancel</button>
-        <button className="primary" onClick={() => onSave(cp)}>Save</button>
+        <button className="primary" onClick={handleSave}>Save</button>
       </div>
     </div>
   );

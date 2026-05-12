@@ -103,6 +103,19 @@ export interface GelResult {
 export interface UISettings {
   timeFormat: '12h' | '24h';
   distUnit: 'km' | 'mi';
+  mapStyle: 'osm' | 'topo' | 'satellite';
+  lineMode: 'solid' | 'elevation' | 'speed';
+  lineColor: string;
+  terrainOverlay: boolean;
+  showGels: boolean;
 }
 
-export const DEFAULT_UI_SETTINGS: UISettings = { timeFormat: '24h', distUnit: 'km' };
+export const DEFAULT_UI_SETTINGS: UISettings = {
+  timeFormat: '24h',
+  distUnit: 'km',
+  mapStyle: 'satellite',
+  lineMode: 'elevation',
+  lineColor: '#ffd54f',
+  terrainOverlay: false,
+  showGels: true,
+};

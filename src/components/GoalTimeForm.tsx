@@ -65,11 +65,34 @@ function goalFromPace(paceStr: string, distM: number, gainM: number): { h: numbe
   return { h: Math.floor(rounded / 60), min: rounded % 60 };
 }
 
+function GapTooltip({ x, y }: { x: number; y: number }) {
+  const left = Math.min(x, window.innerWidth - 252);
+  return (
+    <div style={{
+      position: 'fixed', left, top: y, width: 240, zIndex: 9000,
+      background: 'var(--bg-card)', border: '1px solid var(--border)',
+      borderRadius: 9, padding: '10px 12px',
+      fontSize: 11, lineHeight: 1.7, color: 'var(--text)',
+      boxShadow: '0 4px 20px rgba(0,0,0,.55)', pointerEvents: 'none',
+    }}>
+      <div style={{ fontWeight: 600, marginBottom: 4 }}>Grade Adjusted Pace</div>
+      <div style={{ color: 'var(--text-secondary)' }}>
+        Pace normalised for elevation using the NAIS formula — 1 m of climb equals ~6 m on flat ground.
+        Represents your flat-equivalent effort across a hilly course.
+      </div>
+      <div style={{ marginTop: 6, color: 'var(--text-secondary)' }}>
+        Editing this field automatically updates <span style={{ color: 'var(--text)' }}>Goal time</span>, and vice versa.
+      </div>
+    </div>
+  );
+}
+
 export default function GoalTimeForm({
   goalH, goalMin, raceStartTime,
   onChangeGoal, onChangeStart,
   timeFormat = '24h', totalDistM, totalElevGainM,
 }: Props) {
+  const [gapTip, setGapTip] = useState<{ x: number; y: number } | null>(null);
   const [goalStr, setGoalStr] = useState(`${goalH}:${String(goalMin).padStart(2, '0')}`);
   const [startStr, setStartStr] = useState(
     timeFormat === '12h' ? to12h(raceStartTime) : raceStartTime
@@ -155,7 +178,23 @@ export default function GoalTimeForm({
 
       {hasDist && (
         <div style={row}>
-          <label style={{ whiteSpace: 'nowrap', color: 'var(--text-secondary)', fontSize: 12 }} title="Grade Adjusted Pace — elevation-equivalent flat pace (NAIS: 1 m gain ≈ 6 m flat)">avg GAP</label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <label style={{ whiteSpace: 'nowrap', color: 'var(--text-secondary)', fontSize: 12 }}>avg GAP</label>
+            <span
+              style={{
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                width: 13, height: 13, borderRadius: '50%', flexShrink: 0,
+                border: '1px solid var(--text-hint)', color: 'var(--text-hint)',
+                fontSize: 9, fontWeight: 700, cursor: 'help', userSelect: 'none',
+              }}
+              onMouseEnter={e => {
+                const r = e.currentTarget.getBoundingClientRect();
+                setGapTip({ x: r.left, y: r.bottom + 6 });
+              }}
+              onMouseLeave={() => setGapTip(null)}
+            >i</span>
+            {gapTip && <GapTooltip x={gapTip.x} y={gapTip.y} />}
+          </div>
           <input
             type="text"
             value={paceStr}

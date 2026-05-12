@@ -44,6 +44,28 @@ function parseTrkpts(doc: Document): Array<{ lat: number; lon: number; ele: numb
   return [];
 }
 
+function interpolatePoints(pts: TrackPoint[], maxSegM = 30): TrackPoint[] {
+  const out: TrackPoint[] = [];
+  for (let i = 0; i < pts.length; i++) {
+    out.push(pts[i]);
+    if (i === pts.length - 1) break;
+    const a = pts[i], b = pts[i + 1];
+    const seg = b.distFromStart - a.distFromStart;
+    if (seg <= maxSegM) continue;
+    const n = Math.ceil(seg / maxSegM);
+    for (let j = 1; j < n; j++) {
+      const t = j / n;
+      out.push({
+        lat: a.lat + t * (b.lat - a.lat),
+        lon: a.lon + t * (b.lon - a.lon),
+        ele: a.ele + t * (b.ele - a.ele),
+        distFromStart: a.distFromStart + t * seg,
+      });
+    }
+  }
+  return out;
+}
+
 export function parseRoute(text: string): ParsedRoute {
   const parser = new DOMParser();
   const doc = parser.parseFromString(text, 'application/xml');
@@ -61,15 +83,16 @@ export function parseRoute(text: string): ParsedRoute {
   });
 
   const smoothed = smooth(pts, 100);
-  const totalDistM = smoothed[smoothed.length - 1].distFromStart;
+  const interpolated = interpolatePoints(smoothed);
+  const totalDistM = interpolated[interpolated.length - 1].distFromStart;
 
   let gain = 0;
-  for (let i = 1; i < smoothed.length; i++) {
-    const delta = smoothed[i].ele - smoothed[i - 1].ele;
+  for (let i = 1; i < interpolated.length; i++) {
+    const delta = interpolated[i].ele - interpolated[i - 1].ele;
     if (delta > 0) gain += delta;
   }
 
-  return { points: smoothed, totalDistM, totalElevGainM: gain, name };
+  return { points: interpolated, totalDistM, totalElevGainM: gain, name };
 }
 
 export function parseActivity(text: string): ParsedActivity {

@@ -18,6 +18,7 @@ import PrintPlan from './components/PrintPlan';
 import AdvancedSettingsPanel from './components/AdvancedSettingsPanel';
 import GelAdvisorPanel from './components/GelAdvisorPanel';
 import TrailsModal, { loadTrails, persistTrails, AUTOSAVE_ENABLED_KEY, AUTOSAVE_ID_KEY } from './components/TrailsModal';
+const LAST_TRAIL_KEY = 'topopace_last_trail';
 import Tutorial, { TUTORIAL_DONE_KEY } from './components/Tutorial';
 
 const MOUNTAIN_CENTERS: [number, number][] = [
@@ -77,11 +78,14 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('topopace_ui', JSON.stringify(uiSettings));
   }, [uiSettings]);
+  const mapStyle = uiSettings.mapStyle;
+  const lineMode = uiSettings.lineMode;
+  const lineColor = uiSettings.lineColor;
+  const terrainOverlay = uiSettings.terrainOverlay;
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [mapPanelExpanded, setMapPanelExpanded] = useState(false);
+  const mapPanelLeaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const settingsBtnRef = useRef<HTMLButtonElement>(null);
-  const [mapStyle, setMapStyle] = useState<'osm' | 'topo' | 'satellite'>('osm');
-  const [lineMode, setLineMode] = useState<'solid' | 'elevation' | 'speed' | 'terrain'>('solid');
-  const [lineColor, setLineColor] = useState('#ffd54f');
   const chartWrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -224,7 +228,7 @@ export default function App() {
       const overlapping = prev.filter(t => startKm < t.endKm && endKm > t.startKm);
       if (overlapping.length > 0) {
         setConflictTerrainIds(new Set(overlapping.map(t => t.id)));
-        setTimeout(() => setConflictTerrainIds(new Set()), 1600);
+        setTimeout(() => setConflictTerrainIds(new Set()), 400);
         return prev;
       }
       return [...prev, { id: crypto.randomUUID(), startKm, endKm, difficultyPercent: 0 }];
@@ -235,8 +239,34 @@ export default function App() {
     setTerrainSegs(prev => prev.map(t => t.id === id ? { ...t, difficultyPercent } : t));
   }, []);
 
+  const [removedTerrain, setRemovedTerrain] = useState<{ seg: TerrainSegment; index: number } | null>(null);
+  const terrainUndoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const handleRemoveTerrain = useCallback((id: string) => {
-    setTerrainSegs(prev => prev.filter(t => t.id !== id));
+    setTerrainSegs(prev => {
+      const idx = prev.findIndex(t => t.id === id);
+      if (idx < 0) return prev;
+      const seg = prev[idx];
+      if (terrainUndoTimerRef.current) clearTimeout(terrainUndoTimerRef.current);
+      setRemovedTerrain({ seg, index: idx });
+      terrainUndoTimerRef.current = setTimeout(() => { setRemovedTerrain(null); terrainUndoTimerRef.current = null; }, 3000);
+      return prev.filter(t => t.id !== id);
+    });
+  }, []);
+
+  const handleTerrainUndo = useCallback(() => {
+    if (!removedTerrain) return;
+    if (terrainUndoTimerRef.current) { clearTimeout(terrainUndoTimerRef.current); terrainUndoTimerRef.current = null; }
+    setTerrainSegs(prev => {
+      const next = [...prev];
+      next.splice(removedTerrain.index, 0, removedTerrain.seg);
+      return next;
+    });
+    setRemovedTerrain(null);
+  }, [removedTerrain]);
+
+  const handleMoveCheckpoint = useCallback((id: string, distM: number) => {
+    setCheckpoints(prev => prev.map(cp => cp.id === id ? { ...cp, distM } : cp));
   }, []);
 
   const canPrint = route && goalH + goalMin > 0 && results.length > 0;
@@ -247,7 +277,8 @@ export default function App() {
     route: { points: route.points, totalDistM: route.totalDistM, totalElevGainM: route.totalElevGainM },
     goalH, goalMin, raceStartTime,
     checkpoints, terrainSegments: terrainSegs, gelZones, advancedSettings,
-  } : null, [route, raceName, goalH, goalMin, raceStartTime, checkpoints, terrainSegs, gelZones, advancedSettings]);
+    mapView: { mapStyle, lineMode, lineColor, terrainOverlay },
+  } : null, [route, raceName, goalH, goalMin, raceStartTime, checkpoints, terrainSegs, gelZones, advancedSettings, mapStyle, lineMode, lineColor, terrainOverlay]);
 
   useEffect(() => {
     if (!autoSave || !currentPlanData) return;
@@ -264,6 +295,7 @@ export default function App() {
         const id = crypto.randomUUID();
         autoSaveIdRef.current = id;
         localStorage.setItem(AUTOSAVE_ID_KEY, id);
+        localStorage.setItem(LAST_TRAIL_KEY, id);
         trails.unshift({ ...currentPlanData, trailId: id, savedAt: Date.now() });
       }
       persistTrails(trails);
@@ -291,10 +323,23 @@ export default function App() {
     setAdvancedSettings(prev => ({ ...prev, ...(data.advancedSettings ?? {}) }));
     if (data.calibration?.length) setCalibrations(data.calibration);
     if (data.gelZones?.length) gelZonesLockedRef.current = true;
+    if (data.mapView) {
+      setUiSettings(prev => ({ ...prev, ...data.mapView! }));
+    }
     if ('trailId' in data) {
       autoSaveIdRef.current = (data as { trailId: string }).trailId;
       localStorage.setItem(AUTOSAVE_ID_KEY, autoSaveIdRef.current);
+      localStorage.setItem(LAST_TRAIL_KEY, autoSaveIdRef.current);
     }
+  }, []);
+
+  // Auto-load last opened trail on mount
+  useEffect(() => {
+    const lastId = localStorage.getItem(LAST_TRAIL_KEY);
+    if (!lastId) return;
+    const trail = loadTrails().find(t => t.trailId === lastId);
+    if (trail) handleLoadPlan(trail);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleAutoSaveChange = useCallback((v: boolean) => {
@@ -392,11 +437,11 @@ export default function App() {
             >⚙</button>
             {settingsOpen && (
               <>
-                <div style={{ position: 'fixed', inset: 0, zIndex: 999 }} onClick={() => setSettingsOpen(false)} />
+                <div style={{ position: 'fixed', inset: 0, zIndex: 1009 }} onClick={() => setSettingsOpen(false)} />
                 <div style={{
                   position: 'absolute', top: '100%', right: 0, marginTop: 4,
                   background: 'var(--bg-card)', border: '1px solid var(--border)',
-                  borderRadius: 10, padding: '12px 14px', zIndex: 1000,
+                  borderRadius: 10, padding: '12px 14px', zIndex: 1010,
                   boxShadow: '0 4px 20px rgba(0,0,0,.5)', minWidth: 180, fontSize: 12,
                   display: 'flex', flexDirection: 'column', gap: 10,
                 }}>
@@ -424,14 +469,6 @@ export default function App() {
                       ))}
                     </div>
                   </div>
-                  <div>
-                    <div style={{ color: 'var(--text-secondary)', marginBottom: 5, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Tutorial</div>
-                    <button
-                      className="ghost"
-                      style={{ width: '100%', fontSize: 11, padding: '3px 0' }}
-                      onClick={() => { localStorage.removeItem(TUTORIAL_DONE_KEY); setTutorialActive(true); setSettingsOpen(false); }}
-                    >Start tutorial</button>
-                  </div>
                 </div>
               </>
             )}
@@ -443,8 +480,8 @@ export default function App() {
         <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
 
           {/* ── Sidebar ── */}
-          <aside style={{ width: 320, minWidth: 280, background: 'var(--bg-card)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
-            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, padding: 14 }}>
+          <aside style={{ width: 320, minWidth: 280, background: 'var(--bg-card)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', flexShrink: 0, overflow: 'hidden' }}>
+            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, padding: 14, minHeight: 0 }}>
               {/* Trails button — always visible */}
               <button
                 data-tutorial="trails-btn"
@@ -467,9 +504,6 @@ export default function App() {
                   <div data-tutorial="checkpoints">
                     <CheckpointPanel checkpoints={checkpoints} totalDistM={route.totalDistM} onChange={setCheckpoints} />
                   </div>
-                  <div data-tutorial="gel-advisor">
-                    <GelAdvisorPanel settings={advancedSettings} onChange={setAdvancedSettings} gelCount={gelZones.length} />
-                  </div>
                 </>
               ) : (
                 <div style={{ textAlign: 'center', padding: '32px 8px', color: 'var(--text-hint)', fontSize: 13, lineHeight: 1.7 }}>
@@ -480,6 +514,9 @@ export default function App() {
 
             {route && (
               <div style={{ flexShrink: 0, borderTop: '1px solid var(--border)', padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div data-tutorial="gel-advisor">
+                  <GelAdvisorPanel settings={advancedSettings} onChange={setAdvancedSettings} gelCount={gelZones.length} />
+                </div>
                 <div data-tutorial="run-style">
                   <AdvancedSettingsPanel settings={advancedSettings} onChange={setAdvancedSettings} />
                 </div>
@@ -515,55 +552,115 @@ export default function App() {
                 mapStyle={mapStyle}
                 lineMode={lineMode}
                 lineColor={lineColor}
+                terrainOverlay={terrainOverlay}
                 planSegments={segments}
                 terrainSegments={route ? terrainSegs : []}
+                onClickDist={route ? (distM, type) => {
+                  const distKm = distM / 1000;
+                  setCheckpoints(prev => [...prev, {
+                    id: crypto.randomUUID(),
+                    name: type === 'aid' ? `Aid ${distKm.toFixed(1)}km` : `POI ${distKm.toFixed(1)}km`,
+                    distM, type,
+                    plannedStopMin: type === 'aid' ? 5 : 0,
+                  }]);
+                } : undefined}
+                onAddGelAt={route && advancedSettings.gelEnabled ? handleAddGelAt : undefined}
+                onHoverDist={route ? setHoverDistM : undefined}
+                gelResults={route && advancedSettings.gelEnabled ? gelResults : []}
+                showGels={uiSettings.showGels}
               />
               {route && (
-                <div className="anim-pop" style={{
-                  position: 'absolute', top: 8, right: 8, zIndex: 1001,
-                  background: 'var(--bg-card)', border: '1px solid var(--border)',
-                  borderRadius: 10, padding: '8px 10px',
-                  boxShadow: '0 2px 12px rgba(0,0,0,0.45)',
-                  display: 'flex', flexDirection: 'column', gap: 8, minWidth: 110,
-                }}>
-                  {/* Map style */}
-                  <div>
-                    <div style={{ fontSize: 10, color: 'var(--text-hint)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Map</div>
-                    <div style={{ display: 'flex', gap: 3 }}>
-                      {(['osm', 'topo', 'satellite'] as const).map(s => (
-                        <button key={s} className={mapStyle === s ? 'primary' : 'ghost'}
-                          style={{ fontSize: 10, padding: '2px 5px', flex: 1 }}
-                          onClick={() => setMapStyle(s)}>
-                          {s === 'osm' ? 'Str' : s === 'topo' ? 'Tpo' : 'Sat'}
-                        </button>
-                      ))}
+                <div
+                  style={{
+                    position: 'absolute', top: 8, right: 8, zIndex: 1001,
+                    background: 'var(--bg-card)', border: '1px solid var(--border)',
+                    borderRadius: 10,
+                    boxShadow: '0 2px 12px rgba(0,0,0,0.45)',
+                  }}
+                  onMouseEnter={() => {
+                    if (mapPanelLeaveTimerRef.current) clearTimeout(mapPanelLeaveTimerRef.current);
+                    setMapPanelExpanded(true);
+                  }}
+                  onMouseLeave={() => {
+                    mapPanelLeaveTimerRef.current = setTimeout(() => setMapPanelExpanded(false), 200);
+                  }}
+                >
+                  {mapPanelExpanded ? (
+                    <div className="anim-pop" style={{
+                      padding: '12px 15px', display: 'flex', flexDirection: 'column', gap: 12, minWidth: 165,
+                    }}>
+                      {/* Map style */}
+                      <div>
+                        <div style={{ fontSize: 15, color: 'var(--text-hint)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Map</div>
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          {(['osm', 'topo', 'satellite'] as const).map(s => (
+                            <button key={s} className={mapStyle === s ? 'primary' : 'ghost'}
+                              style={{ fontSize: 15, padding: '3px 7px', flex: 1 }}
+                              onClick={() => setUiSettings(u => ({ ...u, mapStyle: s }))}>
+                              {s === 'osm' ? 'Str' : s === 'topo' ? 'Tpo' : 'Sat'}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      {/* Line color */}
+                      <div>
+                        <div style={{ fontSize: 15, color: 'var(--text-hint)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Line</div>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
+                          {['#ffd54f', '#4caf50', '#2196f3', '#f44336', '#ffffff', '#e040fb'].map(c => (
+                            <div key={c} onClick={() => setUiSettings(u => ({ ...u, lineMode: 'solid', lineColor: c }))}
+                              style={{
+                                width: 21, height: 21, borderRadius: '50%', background: c, cursor: 'pointer',
+                                outline: lineMode === 'solid' && lineColor === c ? '2px solid var(--green)' : '2px solid transparent',
+                                outlineOffset: 1,
+                              }} />
+                          ))}
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                          {([
+                            { mode: 'elevation', label: '↑ Elevation' },
+                            { mode: 'speed',     label: '⚡ Speed' },
+                          ] as const).map(({ mode, label }) => (
+                            <button key={mode} className={lineMode === mode ? 'primary' : 'ghost'}
+                              style={{ fontSize: 15, padding: '3px 9px', textAlign: 'left' }}
+                              onClick={() => setUiSettings(u => ({ ...u, lineMode: mode }))}>{label}</button>
+                          ))}
+                        </div>
+                      </div>
+                      {/* Terrain overlay */}
+                      {terrainSegs.length > 0 && (
+                        <div>
+                          <div style={{ fontSize: 15, color: 'var(--text-hint)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Terrain</div>
+                          <button
+                            className={terrainOverlay ? 'primary' : 'ghost'}
+                            style={{ fontSize: 15, padding: '3px 9px', width: '100%', textAlign: 'left' }}
+                            onClick={() => setUiSettings(u => ({ ...u, terrainOverlay: !u.terrainOverlay }))}
+                          >◼ Overlay {terrainOverlay ? 'On' : 'Off'}</button>
+                        </div>
+                      )}
+                      {/* Gel visibility */}
+                      {advancedSettings.gelEnabled && gelZones.length > 0 && (
+                        <div>
+                          <div style={{ fontSize: 15, color: 'var(--text-hint)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Gels</div>
+                          <button
+                            className={uiSettings.showGels ? 'primary' : 'ghost'}
+                            style={{ fontSize: 15, padding: '3px 9px', width: '100%', textAlign: 'left' }}
+                            onClick={() => setUiSettings(u => ({ ...u, showGels: !u.showGels }))}
+                          >● Show gels {uiSettings.showGels ? 'On' : 'Off'}</button>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                  {/* Line color */}
-                  <div>
-                    <div style={{ fontSize: 10, color: 'var(--text-hint)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Line</div>
-                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 4 }}>
-                      {['#ffd54f', '#4caf50', '#2196f3', '#f44336', '#ffffff', '#e040fb'].map(c => (
-                        <div key={c} onClick={() => { setLineMode('solid'); setLineColor(c); }}
-                          style={{
-                            width: 14, height: 14, borderRadius: '50%', background: c, cursor: 'pointer',
-                            outline: lineMode === 'solid' && lineColor === c ? '2px solid var(--green)' : '2px solid transparent',
-                            outlineOffset: 1,
-                          }} />
-                      ))}
+                  ) : (
+                    <div style={{ padding: '6px 10px', display: 'flex', gap: 6, alignItems: 'center', cursor: 'default' }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>
+                        {mapStyle === 'osm' ? 'Str' : mapStyle === 'topo' ? 'Tpo' : 'Sat'}
+                      </span>
+                      <span style={{ color: 'var(--text-hint)' }}>·</span>
+                      <span style={{ fontSize: 14 }}>
+                        {lineMode === 'elevation' ? '↑' : lineMode === 'speed' ? '⚡'
+                          : <span style={{ width: 10, height: 10, borderRadius: '50%', background: lineColor, display: 'inline-block', verticalAlign: 'middle' }} />}
+                      </span>
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      {([
-                        { mode: 'elevation', label: '↑ Elevation' },
-                        { mode: 'speed',     label: '⚡ Speed' },
-                        { mode: 'terrain',   label: '◼ Terrain' },
-                      ] as const).map(({ mode, label }) => (
-                        <button key={mode} className={lineMode === mode ? 'primary' : 'ghost'}
-                          style={{ fontSize: 10, padding: '2px 6px', textAlign: 'left' }}
-                          onClick={() => setLineMode(mode)}>{label}</button>
-                      ))}
-                    </div>
-                  </div>
+                  )}
                 </div>
               )}
             </div>
@@ -619,10 +716,12 @@ export default function App() {
                         }]);
                       }}
                       onAddGelAt={advancedSettings.gelEnabled ? handleAddGelAt : undefined}
+                      hoverDistM={hoverDistM}
                       onHoverDist={setHoverDistM}
                       onMarkSelection={handleMarkSelection}
                       onUpdateTerrain={handleUpdateTerrain}
                       onRemoveTerrain={handleRemoveTerrain}
+                      onMoveCheckpoint={handleMoveCheckpoint}
                       results={results as CheckpointResult[]}
                       gelResults={advancedSettings.gelInSchedule ? gelResults : []}
                       showScheduleLabels={profileMode === 'chart'}
@@ -678,10 +777,25 @@ export default function App() {
         </div>
       </main>
 
+      {/* Terrain undo toast */}
+      {removedTerrain && (
+        <div style={{
+          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+          background: 'var(--bg-card)', border: '1px solid var(--border)',
+          borderRadius: 10, padding: '10px 18px',
+          display: 'flex', alignItems: 'center', gap: 12,
+          boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+          fontSize: 13, zIndex: 9999, whiteSpace: 'nowrap',
+        }}>
+          <span style={{ color: 'var(--text-secondary)' }}>Terrain segment removed</span>
+          <button className="primary" style={{ fontSize: 12, padding: '3px 12px' }} onClick={handleTerrainUndo}>Undo</button>
+        </div>
+      )}
+
       {/* Gel undo toast */}
       {removedGel && (
         <div style={{
-          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+          position: 'fixed', bottom: removedTerrain ? 72 : 24, left: '50%', transform: 'translateX(-50%)',
           background: 'var(--bg-card)', border: '1px solid var(--border)',
           borderRadius: 10, padding: '10px 18px',
           display: 'flex', alignItems: 'center', gap: 12,

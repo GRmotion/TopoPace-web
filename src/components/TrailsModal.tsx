@@ -1,10 +1,12 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { parseTopoPace, serializeTopoPace, downloadFile } from '../utils/TopoPaceFile';
 import type { TopoPaceFileData } from '../utils/TopoPaceFile';
 import { parseRoute } from '../parsers/GpxParser';
 import type { ParsedRoute } from '../parsers/GpxParser';
 
 const STORAGE_KEY = 'topopace_trails';
+const AUTOSAVE_ENABLED_KEY = 'topopace_autosave';
+const AUTOSAVE_ID_KEY = 'topopace_autosave_id';
 
 export type StoredTrail = TopoPaceFileData & { trailId: string };
 
@@ -36,6 +38,10 @@ export default function TrailsModal({ onClose, onOpenTrail, onNewRoute, currentP
   const uploadRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
+  const [renameId, setRenameId] = useState<string | null>(null);
+  const [renameVal, setRenameVal] = useState('');
+  const [autoSave, setAutoSave] = useState(() => localStorage.getItem(AUTOSAVE_ENABLED_KEY) === '1');
+  const autoSaveIdRef = useRef<string>(localStorage.getItem(AUTOSAVE_ID_KEY) ?? '');
 
   function update(updated: StoredTrail[]) {
     setTrails(updated);
@@ -44,11 +50,45 @@ export default function TrailsModal({ onClose, onOpenTrail, onNewRoute, currentP
 
   function handleSaveCurrent() {
     if (!currentPlan) return;
-    const trail: StoredTrail = { ...currentPlan, trailId: crypto.randomUUID(), savedAt: Date.now() };
-    update([trail, ...trails]);
+    const id = crypto.randomUUID();
+    const trail: StoredTrail = { ...currentPlan, trailId: id, savedAt: Date.now() };
+    setTrails(prev => { const next = [trail, ...prev]; persistTrails(next); return next; });
+    autoSaveIdRef.current = id;
+    localStorage.setItem(AUTOSAVE_ID_KEY, id);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }
+
+  function toggleAutoSave() {
+    const next = !autoSave;
+    setAutoSave(next);
+    localStorage.setItem(AUTOSAVE_ENABLED_KEY, next ? '1' : '0');
+  }
+
+  useEffect(() => {
+    if (!autoSave || !currentPlan) return;
+    const timer = setTimeout(() => {
+      setTrails(prev => {
+        const existingIdx = autoSaveIdRef.current
+          ? prev.findIndex(t => t.trailId === autoSaveIdRef.current)
+          : -1;
+        let next: StoredTrail[];
+        if (existingIdx >= 0) {
+          next = prev.map((t, i) =>
+            i === existingIdx ? { ...currentPlan, trailId: t.trailId, savedAt: Date.now() } : t
+          );
+        } else {
+          const id = crypto.randomUUID();
+          autoSaveIdRef.current = id;
+          localStorage.setItem(AUTOSAVE_ID_KEY, id);
+          next = [{ ...currentPlan, trailId: id, savedAt: Date.now() }, ...prev];
+        }
+        persistTrails(next);
+        return next;
+      });
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [autoSave, currentPlan]);
 
   function closeMenu() { setMenuId(null); setMenuPos(null); }
 
@@ -84,6 +124,13 @@ export default function TrailsModal({ onClose, onOpenTrail, onNewRoute, currentP
     closeMenu();
   }
 
+  function handleRenameCommit(trail: StoredTrail) {
+    const trimmed = renameVal.trim();
+    if (trimmed && trimmed !== trail.name)
+      update(trails.map(t => t.trailId === trail.trailId ? { ...t, name: trimmed } : t));
+    setRenameId(null);
+  }
+
   async function handleUpload(file: File) {
     setError('');
     const name = file.name.toLowerCase();
@@ -114,12 +161,41 @@ export default function TrailsModal({ onClose, onOpenTrail, onNewRoute, currentP
           <button className="ghost" style={{ fontSize: 20, padding: '0 6px', lineHeight: 1 }} onClick={onClose}>×</button>
         </div>
 
-        {/* Save current */}
+        {/* Save current + auto-save */}
         {currentPlan && (
           <div style={{ padding: '10px 20px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
-            <button className="ghost" style={{ width: '100%', fontSize: 12 }} onClick={handleSaveCurrent}>
-              {saved ? '✓ Saved!' : '💾 Save current plan to library'}
-            </button>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>💾 Save current plan to library</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }} onClick={toggleAutoSave}>
+                <span style={{ fontSize: 11, color: 'var(--text-hint)' }}>Auto-save</span>
+                <div style={{
+                  width: 32, height: 18, borderRadius: 9,
+                  background: autoSave ? 'var(--green)' : 'var(--border)',
+                  position: 'relative',
+                  transition: 'background 200ms',
+                  flexShrink: 0,
+                }}>
+                  <div style={{
+                    position: 'absolute', top: 2,
+                    left: autoSave ? 14 : 2,
+                    width: 14, height: 14,
+                    borderRadius: '50%', background: '#fff',
+                    transition: 'left 220ms cubic-bezier(0.3,0,0,1)',
+                  }} />
+                </div>
+              </div>
+            </div>
+            <div style={{
+              display: 'grid',
+              gridTemplateRows: autoSave ? '0fr' : '1fr',
+              transition: 'grid-template-rows 250ms cubic-bezier(0.3,0,0,1)',
+            }}>
+              <div style={{ overflow: 'hidden' }}>
+                <button className="ghost" style={{ width: '100%', fontSize: 12, marginTop: 8 }} onClick={handleSaveCurrent}>
+                  {saved ? '✓ Saved!' : 'Save now'}
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -131,22 +207,42 @@ export default function TrailsModal({ onClose, onOpenTrail, onNewRoute, currentP
             </div>
           )}
           {trails.map(trail => (
-            <div key={trail.trailId} style={{
-              background: 'var(--bg)', border: '1px solid var(--border)',
-              borderRadius: 10, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10,
-            }}>
+            <div key={trail.trailId}
+              style={{
+                background: 'var(--bg)', border: '1px solid var(--border)',
+                borderRadius: 10, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10,
+                cursor: renameId === trail.trailId ? 'default' : 'pointer',
+              }}
+              onClick={() => { if (renameId === trail.trailId) return; onOpenTrail(trail); onClose(); }}
+            >
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 600, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{trail.name}</div>
+                {renameId === trail.trailId ? (
+                  <input
+                    autoFocus
+                    value={renameVal}
+                    onChange={e => setRenameVal(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') handleRenameCommit(trail);
+                      if (e.key === 'Escape') setRenameId(null);
+                    }}
+                    onBlur={() => handleRenameCommit(trail)}
+                    onClick={e => e.stopPropagation()}
+                    style={{
+                      width: '100%', background: 'var(--bg-card)', border: '1px solid var(--green)',
+                      borderRadius: 4, color: 'inherit', fontSize: 13, fontWeight: 600,
+                      padding: '1px 6px', outline: 'none',
+                    }}
+                  />
+                ) : (
+                  <div style={{ fontWeight: 600, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{trail.name}</div>
+                )}
                 <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
                   {(trail.route.totalDistM / 1000).toFixed(1)} km · ↑{Math.round(trail.route.totalElevGainM)}m · {new Date(trail.savedAt).toLocaleDateString()}
                 </div>
               </div>
-              <button className="primary" style={{ fontSize: 11, padding: '4px 14px', flexShrink: 0 }}
-                onClick={() => { onOpenTrail(trail); onClose(); }}>Open</button>
-              <div style={{ flexShrink: 0 }}>
+              <div style={{ flexShrink: 0 }} onClick={e => e.stopPropagation()}>
                 <button className="ghost" style={{ fontSize: 16, padding: '4px 7px', lineHeight: 1, letterSpacing: 1 }}
                   onClick={e => {
-                    e.stopPropagation();
                     if (menuId === trail.trailId) { setMenuId(null); setMenuPos(null); return; }
                     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
                     setMenuId(trail.trailId);
@@ -175,15 +271,16 @@ export default function TrailsModal({ onClose, onOpenTrail, onNewRoute, currentP
               position: 'fixed', top: menuPos.top, right: menuPos.right,
               background: 'var(--bg-card)', border: '1px solid var(--border)',
               borderRadius: 8, boxShadow: '0 4px 20px rgba(0,0,0,0.55)',
-              zIndex: 2101, minWidth: 150, overflow: 'hidden',
+              zIndex: 2101, width: 'max-content', overflow: 'hidden',
             }}>
               {(() => {
                 const trail = trails.find(t => t.trailId === menuId);
                 if (!trail) return null;
                 return [
-                  { label: 'Duplicate', action: () => handleDuplicate(trail) },
+                  { label: 'Rename',       action: () => { setRenameId(trail.trailId); setRenameVal(trail.name); closeMenu(); } },
+                  { label: 'Duplicate',    action: () => handleDuplicate(trail) },
                   { label: 'Export .tppa', action: () => handleExport(trail) },
-                  { label: 'Remove', action: () => handleRemove(trail), danger: true },
+                  { label: 'Remove',       action: () => handleRemove(trail), danger: true },
                 ].map(item => (
                   <button key={item.label} className="ghost" style={{
                     width: '100%', textAlign: 'left', borderRadius: 0,

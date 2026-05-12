@@ -32,6 +32,7 @@ export default function TrailsModal({ onClose, onOpenTrail, onNewRoute, currentP
   const [removedTrail, setRemovedTrail] = useState<StoredTrail | null>(null);
   const undoRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [menuId, setMenuId] = useState<string | null>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
@@ -49,20 +50,22 @@ export default function TrailsModal({ onClose, onOpenTrail, onNewRoute, currentP
     setTimeout(() => setSaved(false), 2000);
   }
 
+  function closeMenu() { setMenuId(null); setMenuPos(null); }
+
   function handleDuplicate(trail: StoredTrail) {
     const copy: StoredTrail = { ...trail, trailId: crypto.randomUUID(), name: trail.name + ' (copy)', savedAt: Date.now() };
     const idx = trails.findIndex(t => t.trailId === trail.trailId);
     const next = [...trails];
     next.splice(idx + 1, 0, copy);
     update(next);
-    setMenuId(null);
+    closeMenu();
   }
 
   function handleRemove(trail: StoredTrail) {
     update(trails.filter(t => t.trailId !== trail.trailId));
     if (undoRef.current) clearTimeout(undoRef.current);
     setRemovedTrail(trail);
-    setMenuId(null);
+    closeMenu();
     undoRef.current = setTimeout(() => setRemovedTrail(null), 5000);
   }
 
@@ -78,7 +81,7 @@ export default function TrailsModal({ onClose, onOpenTrail, onNewRoute, currentP
     const { trailId: _id, ...data } = trail;
     const safe = trail.name.replace(/[^a-z0-9]/gi, '_').replace(/_+/g, '_').slice(0, 60);
     downloadFile(serializeTopoPace(data), `${safe}.tppa`);
-    setMenuId(null);
+    closeMenu();
   }
 
   async function handleUpload(file: File) {
@@ -140,31 +143,15 @@ export default function TrailsModal({ onClose, onOpenTrail, onNewRoute, currentP
               </div>
               <button className="primary" style={{ fontSize: 11, padding: '4px 14px', flexShrink: 0 }}
                 onClick={() => { onOpenTrail(trail); onClose(); }}>Open</button>
-              <div style={{ position: 'relative', flexShrink: 0 }}>
+              <div style={{ flexShrink: 0 }}>
                 <button className="ghost" style={{ fontSize: 16, padding: '4px 7px', lineHeight: 1, letterSpacing: 1 }}
-                  onClick={e => { e.stopPropagation(); setMenuId(menuId === trail.trailId ? null : trail.trailId); }}>⋯</button>
-                {menuId === trail.trailId && (
-                  <>
-                    <div style={{ position: 'fixed', inset: 0, zIndex: 1 }} onClick={() => setMenuId(null)} />
-                    <div className="anim-pop" style={{
-                      position: 'absolute', right: 0, top: '100%', marginTop: 4,
-                      background: 'var(--bg-card)', border: '1px solid var(--border)',
-                      borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
-                      zIndex: 2, minWidth: 150, overflow: 'hidden',
-                    }}>
-                      {[
-                        { label: 'Duplicate', action: () => handleDuplicate(trail) },
-                        { label: 'Export .tppa', action: () => handleExport(trail) },
-                        { label: 'Remove', action: () => handleRemove(trail), danger: true },
-                      ].map(item => (
-                        <button key={item.label} className="ghost" style={{
-                          width: '100%', textAlign: 'left', borderRadius: 0,
-                          padding: '9px 14px', fontSize: 12, color: item.danger ? 'var(--red)' : undefined,
-                        }} onClick={item.action}>{item.label}</button>
-                      ))}
-                    </div>
-                  </>
-                )}
+                  onClick={e => {
+                    e.stopPropagation();
+                    if (menuId === trail.trailId) { setMenuId(null); setMenuPos(null); return; }
+                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                    setMenuId(trail.trailId);
+                    setMenuPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+                  }}>⋯</button>
               </div>
             </div>
           ))}
@@ -178,6 +165,35 @@ export default function TrailsModal({ onClose, onOpenTrail, onNewRoute, currentP
             onClick={() => uploadRef.current?.click()}>📁 Upload new adventure</button>
           {error && <div style={{ color: 'var(--red)', fontSize: 11, marginTop: 6 }}>{error}</div>}
         </div>
+
+        {/* "..." context menu — fixed to viewport so it's never clipped */}
+        {menuId && menuPos && (
+          <>
+            <div style={{ position: 'fixed', inset: 0, zIndex: 2100 }}
+              onClick={() => { setMenuId(null); setMenuPos(null); }} />
+            <div className="anim-pop" style={{
+              position: 'fixed', top: menuPos.top, right: menuPos.right,
+              background: 'var(--bg-card)', border: '1px solid var(--border)',
+              borderRadius: 8, boxShadow: '0 4px 20px rgba(0,0,0,0.55)',
+              zIndex: 2101, minWidth: 150, overflow: 'hidden',
+            }}>
+              {(() => {
+                const trail = trails.find(t => t.trailId === menuId);
+                if (!trail) return null;
+                return [
+                  { label: 'Duplicate', action: () => handleDuplicate(trail) },
+                  { label: 'Export .tppa', action: () => handleExport(trail) },
+                  { label: 'Remove', action: () => handleRemove(trail), danger: true },
+                ].map(item => (
+                  <button key={item.label} className="ghost" style={{
+                    width: '100%', textAlign: 'left', borderRadius: 0,
+                    padding: '9px 14px', fontSize: 12, color: item.danger ? 'var(--red)' : undefined,
+                  }} onClick={item.action}>{item.label}</button>
+                ));
+              })()}
+            </div>
+          </>
+        )}
 
         {/* Undo toast */}
         {removedTrail && (

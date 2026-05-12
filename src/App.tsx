@@ -442,7 +442,7 @@ export default function App() {
           {/* ── Right column (map + chart) ── */}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
             {/* Map — always visible */}
-            <div style={{ flex: route ? undefined : 1, minHeight: route ? 150 : 0, position: 'relative' }}>
+            <div style={{ flex: 1, minHeight: route ? 150 : 0, position: 'relative' }}>
               <RouteMap
                 points={route?.points ?? []}
                 checkpoints={route ? checkpoints : []}

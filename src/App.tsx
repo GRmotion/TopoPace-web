@@ -373,7 +373,7 @@ export default function App() {
   }, []);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
       <header style={{ background: 'var(--bg-card)', borderBottom: '1px solid var(--border)', padding: '12px 24px', display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <img src="/logo_topopace.svg" width="28" height="28" alt="" style={{ flexShrink: 0 }} />
@@ -587,15 +587,15 @@ export default function App() {
                 >
                   {mapPanelExpanded ? (
                     <div className="anim-pop" style={{
-                      padding: '12px 15px', display: 'flex', flexDirection: 'column', gap: 12, minWidth: 165,
+                      padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10, minWidth: 140,
                     }}>
                       {/* Map style */}
                       <div>
-                        <div style={{ fontSize: 15, color: 'var(--text-hint)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Map</div>
+                        <label style={{ display: 'block', marginBottom: 4 }}>Map</label>
                         <div style={{ display: 'flex', gap: 4 }}>
                           {(['osm', 'topo', 'satellite'] as const).map(s => (
                             <button key={s} className={mapStyle === s ? 'primary' : 'ghost'}
-                              style={{ fontSize: 15, padding: '3px 7px', flex: 1 }}
+                              style={{ fontSize: 12, padding: '3px 6px', flex: 1 }}
                               onClick={() => setUiSettings(u => ({ ...u, mapStyle: s }))}>
                               {s === 'osm' ? 'Str' : s === 'topo' ? 'Tpo' : 'Sat'}
                             </button>
@@ -604,12 +604,12 @@ export default function App() {
                       </div>
                       {/* Line color */}
                       <div>
-                        <div style={{ fontSize: 15, color: 'var(--text-hint)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Line</div>
-                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
+                        <label style={{ display: 'block', marginBottom: 4 }}>Line</label>
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 4 }}>
                           {['#ffd54f', '#4caf50', '#2196f3', '#f44336', '#ffffff', '#e040fb'].map(c => (
                             <div key={c} onClick={() => setUiSettings(u => ({ ...u, lineMode: 'solid', lineColor: c }))}
                               style={{
-                                width: 21, height: 21, borderRadius: '50%', background: c, cursor: 'pointer',
+                                width: 14, height: 14, borderRadius: '50%', background: c, cursor: 'pointer',
                                 outline: lineMode === 'solid' && lineColor === c ? '2px solid var(--green)' : '2px solid transparent',
                                 outlineOffset: 1,
                               }} />
@@ -621,7 +621,7 @@ export default function App() {
                             { mode: 'speed',     label: '⚡ Speed' },
                           ] as const).map(({ mode, label }) => (
                             <button key={mode} className={lineMode === mode ? 'primary' : 'ghost'}
-                              style={{ fontSize: 15, padding: '3px 9px', textAlign: 'left' }}
+                              style={{ fontSize: 12, padding: '3px 8px', textAlign: 'left' }}
                               onClick={() => setUiSettings(u => ({ ...u, lineMode: mode }))}>{label}</button>
                           ))}
                         </div>
@@ -629,10 +629,10 @@ export default function App() {
                       {/* Terrain overlay */}
                       {terrainSegs.length > 0 && (
                         <div>
-                          <div style={{ fontSize: 15, color: 'var(--text-hint)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Terrain</div>
+                          <label style={{ display: 'block', marginBottom: 4 }}>Terrain</label>
                           <button
                             className={terrainOverlay ? 'primary' : 'ghost'}
-                            style={{ fontSize: 15, padding: '3px 9px', width: '100%', textAlign: 'left' }}
+                            style={{ fontSize: 12, padding: '3px 8px', width: '100%', textAlign: 'left' }}
                             onClick={() => setUiSettings(u => ({ ...u, terrainOverlay: !u.terrainOverlay }))}
                           >◼ Overlay {terrainOverlay ? 'On' : 'Off'}</button>
                         </div>
@@ -640,10 +640,10 @@ export default function App() {
                       {/* Gel visibility */}
                       {advancedSettings.gelEnabled && gelZones.length > 0 && (
                         <div>
-                          <div style={{ fontSize: 15, color: 'var(--text-hint)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Gels</div>
+                          <label style={{ display: 'block', marginBottom: 4 }}>Gels</label>
                           <button
                             className={uiSettings.showGels ? 'primary' : 'ghost'}
-                            style={{ fontSize: 15, padding: '3px 9px', width: '100%', textAlign: 'left' }}
+                            style={{ fontSize: 12, padding: '3px 8px', width: '100%', textAlign: 'left' }}
                             onClick={() => setUiSettings(u => ({ ...u, showGels: !u.showGels }))}
                           >● Show gels {uiSettings.showGels ? 'On' : 'Off'}</button>
                         </div>

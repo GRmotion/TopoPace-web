@@ -17,7 +17,7 @@ import PlanTable from './components/PlanTable';
 import PrintPlan from './components/PrintPlan';
 import AdvancedSettingsPanel from './components/AdvancedSettingsPanel';
 import GelAdvisorPanel from './components/GelAdvisorPanel';
-import TrailsModal from './components/TrailsModal';
+import TrailsModal, { loadTrails, persistTrails, AUTOSAVE_ENABLED_KEY, AUTOSAVE_ID_KEY } from './components/TrailsModal';
 import Tutorial, { TUTORIAL_DONE_KEY } from './components/Tutorial';
 
 const MOUNTAIN_CENTERS: [number, number][] = [
@@ -61,6 +61,10 @@ export default function App() {
   const [profileMode, setProfileMode] = useState<'table' | 'chart'>('chart');
   const [trailsOpen, setTrailsOpen] = useState(false);
   const [tutorialActive, setTutorialActive] = useState(false);
+  const [autoSave, setAutoSave] = useState(() => localStorage.getItem(AUTOSAVE_ENABLED_KEY) === '1');
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'saving' | 'saved' | null>(null);
+  const autoSaveIdRef = useRef<string>(localStorage.getItem(AUTOSAVE_ID_KEY) ?? '');
+  const clearSavedRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const defaultMapCenter = useMemo<[number, number]>(
     () => MOUNTAIN_CENTERS[Math.floor(Math.random() * MOUNTAIN_CENTERS.length)], []
   );
@@ -227,7 +231,6 @@ export default function App() {
   }, []);
 
   const canPrint = route && goalH + goalMin > 0 && results.length > 0;
-
   const currentPlanData: TopoPaceFileData | null = useMemo(() => route ? {
     version: 3,
     savedAt: Date.now(),
@@ -236,6 +239,30 @@ export default function App() {
     goalH, goalMin, raceStartTime,
     checkpoints, terrainSegments: terrainSegs, gelZones, advancedSettings,
   } : null, [route, raceName, goalH, goalMin, raceStartTime, checkpoints, terrainSegs, gelZones, advancedSettings]);
+
+  useEffect(() => {
+    if (!autoSave || !currentPlanData) return;
+    setAutoSaveStatus('saving');
+    if (clearSavedRef.current) clearTimeout(clearSavedRef.current);
+    const t = setTimeout(() => {
+      const trails = loadTrails();
+      const existingIdx = autoSaveIdRef.current
+        ? trails.findIndex(tr => tr.trailId === autoSaveIdRef.current)
+        : -1;
+      if (existingIdx >= 0) {
+        trails[existingIdx] = { ...currentPlanData, trailId: trails[existingIdx].trailId, savedAt: Date.now() };
+      } else {
+        const id = crypto.randomUUID();
+        autoSaveIdRef.current = id;
+        localStorage.setItem(AUTOSAVE_ID_KEY, id);
+        trails.unshift({ ...currentPlanData, trailId: id, savedAt: Date.now() });
+      }
+      persistTrails(trails);
+      setAutoSaveStatus('saved');
+      clearSavedRef.current = setTimeout(() => setAutoSaveStatus(null), 2000);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [autoSave, currentPlanData]);
 
   const handleLoadPlan = useCallback((data: TopoPaceFileData) => {
     const parsedRoute: ParsedRoute = {
@@ -255,6 +282,15 @@ export default function App() {
     setAdvancedSettings(prev => ({ ...prev, ...(data.advancedSettings ?? {}) }));
     if (data.calibration?.length) setCalibrations(data.calibration);
     if (data.gelZones?.length) gelZonesLockedRef.current = true;
+    if ('trailId' in data) {
+      autoSaveIdRef.current = (data as { trailId: string }).trailId;
+      localStorage.setItem(AUTOSAVE_ID_KEY, autoSaveIdRef.current);
+    }
+  }, []);
+
+  const handleAutoSaveChange = useCallback((v: boolean) => {
+    setAutoSave(v);
+    localStorage.setItem(AUTOSAVE_ENABLED_KEY, v ? '1' : '0');
   }, []);
 
   const getChartSvgHtml = useCallback((): string | null => {
@@ -591,6 +627,9 @@ export default function App() {
           onOpenTrail={handleLoadPlan}
           onNewRoute={handleRouteLoad}
           currentPlan={currentPlanData}
+          autoSave={autoSave}
+          onAutoSaveChange={handleAutoSaveChange}
+          autoSaveStatus={autoSaveStatus}
         />
       )}
 

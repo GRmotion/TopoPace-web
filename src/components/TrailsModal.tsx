@@ -1,19 +1,19 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { parseTopoPace, serializeTopoPace, downloadFile } from '../utils/TopoPaceFile';
 import type { TopoPaceFileData } from '../utils/TopoPaceFile';
 import { parseRoute } from '../parsers/GpxParser';
 import type { ParsedRoute } from '../parsers/GpxParser';
 
 const STORAGE_KEY = 'topopace_trails';
-const AUTOSAVE_ENABLED_KEY = 'topopace_autosave';
-const AUTOSAVE_ID_KEY = 'topopace_autosave_id';
+export const AUTOSAVE_ENABLED_KEY = 'topopace_autosave';
+export const AUTOSAVE_ID_KEY = 'topopace_autosave_id';
 
 export type StoredTrail = TopoPaceFileData & { trailId: string };
 
 export function loadTrails(): StoredTrail[] {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]'); } catch { return []; }
 }
-function persistTrails(trails: StoredTrail[]) {
+export function persistTrails(trails: StoredTrail[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(trails));
 }
 export function addTrailToLibrary(data: TopoPaceFileData): void {
@@ -27,9 +27,12 @@ interface Props {
   onOpenTrail: (data: TopoPaceFileData) => void;
   onNewRoute: (route: ParsedRoute) => void;
   currentPlan: TopoPaceFileData | null;
+  autoSave: boolean;
+  onAutoSaveChange: (v: boolean) => void;
+  autoSaveStatus: 'saving' | 'saved' | null;
 }
 
-export default function TrailsModal({ onClose, onOpenTrail, onNewRoute, currentPlan }: Props) {
+export default function TrailsModal({ onClose, onOpenTrail, onNewRoute, currentPlan, autoSave, onAutoSaveChange, autoSaveStatus }: Props) {
   const [trails, setTrails] = useState<StoredTrail[]>(() => loadTrails());
   const [removedTrail, setRemovedTrail] = useState<StoredTrail | null>(null);
   const undoRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -40,8 +43,6 @@ export default function TrailsModal({ onClose, onOpenTrail, onNewRoute, currentP
   const [saved, setSaved] = useState(false);
   const [renameId, setRenameId] = useState<string | null>(null);
   const [renameVal, setRenameVal] = useState('');
-  const [autoSave, setAutoSave] = useState(() => localStorage.getItem(AUTOSAVE_ENABLED_KEY) === '1');
-  const autoSaveIdRef = useRef<string>(localStorage.getItem(AUTOSAVE_ID_KEY) ?? '');
 
   function update(updated: StoredTrail[]) {
     setTrails(updated);
@@ -53,42 +54,10 @@ export default function TrailsModal({ onClose, onOpenTrail, onNewRoute, currentP
     const id = crypto.randomUUID();
     const trail: StoredTrail = { ...currentPlan, trailId: id, savedAt: Date.now() };
     setTrails(prev => { const next = [trail, ...prev]; persistTrails(next); return next; });
-    autoSaveIdRef.current = id;
     localStorage.setItem(AUTOSAVE_ID_KEY, id);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }
-
-  function toggleAutoSave() {
-    const next = !autoSave;
-    setAutoSave(next);
-    localStorage.setItem(AUTOSAVE_ENABLED_KEY, next ? '1' : '0');
-  }
-
-  useEffect(() => {
-    if (!autoSave || !currentPlan) return;
-    const timer = setTimeout(() => {
-      setTrails(prev => {
-        const existingIdx = autoSaveIdRef.current
-          ? prev.findIndex(t => t.trailId === autoSaveIdRef.current)
-          : -1;
-        let next: StoredTrail[];
-        if (existingIdx >= 0) {
-          next = prev.map((t, i) =>
-            i === existingIdx ? { ...currentPlan, trailId: t.trailId, savedAt: Date.now() } : t
-          );
-        } else {
-          const id = crypto.randomUUID();
-          autoSaveIdRef.current = id;
-          localStorage.setItem(AUTOSAVE_ID_KEY, id);
-          next = [{ ...currentPlan, trailId: id, savedAt: Date.now() }, ...prev];
-        }
-        persistTrails(next);
-        return next;
-      });
-    }, 2000);
-    return () => clearTimeout(timer);
-  }, [autoSave, currentPlan]);
 
   function closeMenu() { setMenuId(null); setMenuPos(null); }
 
@@ -157,7 +126,18 @@ export default function TrailsModal({ onClose, onOpenTrail, onNewRoute, currentP
       }}>
         {/* Header */}
         <div style={{ padding: '18px 20px 14px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
-          <span style={{ fontWeight: 700, fontSize: 16 }}>My Trails</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontWeight: 700, fontSize: 16 }}>My Trails</span>
+            {autoSave && autoSaveStatus && (
+              <span style={{
+                fontSize: 11,
+                color: autoSaveStatus === 'saved' ? 'var(--green)' : 'var(--text-hint)',
+                transition: 'color 200ms',
+              }}>
+                {autoSaveStatus === 'saving' ? '↻ saving…' : '✓ saved'}
+              </span>
+            )}
+          </div>
           <button className="ghost" style={{ fontSize: 20, padding: '0 6px', lineHeight: 1 }} onClick={onClose}>×</button>
         </div>
 
@@ -166,7 +146,7 @@ export default function TrailsModal({ onClose, onOpenTrail, onNewRoute, currentP
           <div style={{ padding: '10px 20px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>💾 Save current plan to library</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }} onClick={toggleAutoSave}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }} onClick={() => onAutoSaveChange(!autoSave)}>
                 <span style={{ fontSize: 11, color: 'var(--text-hint)' }}>Auto-save</span>
                 <div style={{
                   width: 32, height: 18, borderRadius: 9,

@@ -93,6 +93,7 @@ export default function App() {
   const [sidebarPeeking, setSidebarPeeking] = useState(false);
   const sidebarLeaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [sunDate, setSunDate] = useState('');
+  const [sunTzOffset, setSunTzOffset] = useState(() => -new Date().getTimezoneOffset() / 60);
   const [sunDialogOpen, setSunDialogOpen] = useState(false);
 
   useEffect(() => {
@@ -669,18 +670,27 @@ export default function App() {
                     style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, padding: '20px 24px', boxShadow: '0 8px 32px rgba(0,0,0,0.65)', minWidth: 240 }}
                     onClick={e => e.stopPropagation()}
                   >
-                    <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>☀️ Sun on the trail</div>
-                    <div style={{ color: 'var(--text-secondary)', fontSize: 12, marginBottom: 14, lineHeight: 1.5 }}>
-                      Solar elevation overlaid on the profile, based on race date and schedule.
-                    </div>
+                    <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 14 }}>☀️ Sun on the trail</div>
                     <label style={{ display: 'block', marginBottom: 6 }}>Race date</label>
                     <input
                       type="date"
                       value={sunDate}
                       onChange={e => setSunDate(e.target.value)}
-                      style={{ width: '100%', fontSize: 13, marginBottom: 14 }}
+                      style={{ width: '100%', fontSize: 13, marginBottom: 12 }}
                       autoFocus
                     />
+                    <label style={{ display: 'block', marginBottom: 6 }}>Timezone</label>
+                    <select
+                      value={sunTzOffset}
+                      onChange={e => setSunTzOffset(Number(e.target.value))}
+                      style={{ width: '100%', fontSize: 13, marginBottom: 16 }}
+                    >
+                      {Array.from({ length: 57 }, (_, i) => i * 0.5 - 12).map(tz => (
+                        <option key={tz} value={tz}>
+                          {`UTC${tz >= 0 ? '+' : ''}${Number.isInteger(tz) ? tz : tz.toFixed(1)}`}
+                        </option>
+                      ))}
+                    </select>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button className="primary" style={{ flex: 1, fontSize: 12 }} onClick={() => setSunDialogOpen(false)}>Apply</button>
                       {sunDate && (
@@ -866,6 +876,7 @@ export default function App() {
                       showScheduleLabels={profileMode === 'chart'}
                       onGelRemove={handleGelRemove}
                       sunDate={sunDate || undefined}
+                      sunTzOffset={sunTzOffset}
                       timeFormat={uiSettings.timeFormat}
                       distUnit={uiSettings.distUnit}
                       conflictTerrainIds={conflictTerrainIds}

@@ -50,6 +50,7 @@ interface Props {
   gelResults?: GelResult[];
   showScheduleLabels?: boolean;
   sunDate?: string;
+  sunTzOffset?: number;
   timeFormat?: '12h' | '24h';
   distUnit?: 'km' | 'mi';
   conflictTerrainIds?: Set<string>;
@@ -101,7 +102,7 @@ export default function ElevationChart({
   notes, onNotesChange,
   emojis, onEmojisChange,
   results, gelResults, showScheduleLabels,
-  sunDate,
+  sunDate, sunTzOffset = 0,
   timeFormat = '24h', distUnit = 'km', conflictTerrainIds,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -339,7 +340,14 @@ export default function ElevationChart({
 
   const sunSamples = useMemo(() => {
     if (!sunDate || !segments?.length || !raceStartTime || data.length < 2) return null;
-    const startUTC = new Date(`${sunDate}T${raceStartTime}:00Z`);
+    // raceStartTime is local time — subtract tzOffset to get UTC
+    const [hh, mm] = raceStartTime.split(':').map(Number);
+    const localMs = (hh * 60 + mm) * 60_000;
+    const tzOffsetMs = sunTzOffset * 3_600_000;
+    const [y, mo, d] = sunDate.split('-').map(Number);
+    const dateMs = Date.UTC(y, mo - 1, d);
+    const startUTC = new Date(dateMs + localMs - tzOffsetMs);
+
     const step = Math.max(1, Math.floor(data.length / 150));
     const out: { km: number; el: number }[] = [];
     for (let i = 0; i < data.length; i += step) {
@@ -349,7 +357,7 @@ export default function ElevationChart({
       out.push({ km: pt.km, el: solarElevationDeg(new Date(startUTC.getTime() + elMs), avgLat, avgLon) });
     }
     return out.length >= 2 ? out : null;
-  }, [sunDate, segments, checkpoints, raceStartTime, data, avgLat, avgLon]);
+  }, [sunDate, sunTzOffset, segments, checkpoints, raceStartTime, data, avgLat, avgLon]);
 
   if (data.length < 2) return <div ref={containerRef} style={{ height }} />;
 

@@ -68,9 +68,30 @@ const STEPS: Step[] = [
   {
     id: 'terrain',
     title: 'Terrain Segments',
-    body: 'After selecting a range, click the + button to mark it as a tougher or easier terrain segment. Great for technical single-track vs. road sections.',
+    body: 'After selecting a range, click + to add a terrain segment. Hover it to reveal the ✕ to remove it. The segment starts at 0% — no change to pace yet.',
     target: 'elevation-chart',
     placement: 'top',
+  },
+  {
+    id: 'terrain-drag',
+    title: 'Adjusting Difficulty',
+    body: 'Drag the % value left for faster terrain (downhill, road), right for harder terrain (rocky trail, mud). The info bar updates instantly — showing the time impact on that segment.',
+    target: 'elevation-chart',
+    placement: 'top',
+  },
+  {
+    id: 'notes',
+    title: 'Profile Notes',
+    body: 'Add text notes anchored to any point on the profile. Click the pencil button to enter note mode, then click the elevation line to set the anchor and again to place the text box. Drag to reposition; hover to reveal the delete button.',
+    target: 'note-btn',
+    placement: 'left',
+  },
+  {
+    id: 'emoji',
+    title: 'Emoji Stickers',
+    body: 'Drop emoji stickers anywhere on the profile. Hover the smiley button to choose from quick presets, or click it to open the full emoji browser with search. Click to drop — drag placed stickers to reposition them.',
+    target: 'emoji-btn',
+    placement: 'left',
   },
   {
     id: 'mode-toggle',
@@ -124,6 +145,10 @@ function fmtSec(sec: number): string {
   const ss = s % 60;
   return `${h}:${String(m).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
 }
+function fmtPace(secPerKm: number): string {
+  const s = Math.max(0, Math.round(secPerKm));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
 
 export default function Tutorial({ onDone }: Props) {
   const [step, setStep] = useState(0);
@@ -136,7 +161,7 @@ export default function Tutorial({ onDone }: Props) {
   const current = STEPS[step];
   const isEnd = current.id === 'end';
   const total = STEPS.length - 1;
-  const isSimStep = !isEnd && (current.id === 'selection' || current.id === 'terrain');
+  const isSimStep = !isEnd && (current.id === 'selection' || current.id === 'terrain' || current.id === 'terrain-drag');
 
   // Measure target element rect
   useLayoutEffect(() => {
@@ -186,7 +211,7 @@ export default function Tutorial({ onDone }: Props) {
   // Animation loop
   useEffect(() => {
     if (!isSimStep || !simPlot) { setAnimT(0); return; }
-    const CYCLE = current.id === 'terrain' ? 4000 : 2500;
+    const CYCLE = current.id === 'terrain' ? 4000 : current.id === 'terrain-drag' ? 5000 : 2500;
     startRef.current = performance.now();
     function tick(now: number) {
       setAnimT(((now - startRef.current) % CYCLE) / CYCLE);
@@ -206,6 +231,7 @@ export default function Tutorial({ onDone }: Props) {
   let selGrow = 0, selAlpha = 0, infoAlpha = 0, simKm = 0;
   let plusAlpha = 0, plusScale = 1;
   let terrainAlpha = 0;
+  let dragAlpha = 0, dragPct = 0, leftArrowAlpha = 0, rightArrowAlpha = 0;
 
   if (isSimStep && simPlot) {
     if (current.id === 'selection') {
@@ -248,12 +274,27 @@ export default function Tutorial({ onDone }: Props) {
       terrainAlpha     = eo(seg(animT, 0.4125, 0.450)) * (1 - globalFade);
     }
     simKm = 6.5 * selGrow;
+
+    if (current.id === 'terrain-drag') {
+      // 5000ms cycle: fade-in → drag left (0→-30%) → hold → drag right (-30→+40%) → hold → fade-out → gap
+      dragAlpha = eo(seg(animT, 0, 0.04)) * (1 - ei(seg(animT, 0.86, 0.95)));
+      const leftDrag  = eo(seg(animT, 0.04, 0.36));
+      const rightDrag = eo(seg(animT, 0.46, 0.76));
+      dragPct = leftDrag * (-30) + rightDrag * 70;
+      leftArrowAlpha  = eo(seg(animT, 0.04, 0.08)) * (1 - eo(seg(animT, 0.33, 0.36)));
+      rightArrowAlpha = eo(seg(animT, 0.46, 0.50)) * (1 - eo(seg(animT, 0.73, 0.76)));
+    }
   }
 
   const simDurSec  = 2242 * (simKm / 6.5);
   const simEndKm   = (25.0 + simKm).toFixed(1);
   const simGainM   = Math.round(320 * simKm / 6.5);
   const simLossM   = Math.round(85  * simKm / 6.5);
+
+  const dragCol = dragPct <= 0 ? '#66bb6a' : dragPct <= 15 ? '#ffd54f' : dragPct <= 40 ? '#ff9800' : '#f44336';
+  const dragBg  = dragPct <= 0 ? 'rgba(102,187,106,0.12)' : dragPct <= 15 ? 'rgba(255,213,79,0.12)' : dragPct <= 40 ? 'rgba(255,152,0,0.12)' : 'rgba(244,67,54,0.12)';
+  const dragPaceSecPerKm = 345 * (1 + dragPct / 100);
+  const dragDurSec = Math.round(2242 * (1 + dragPct / 100));
 
   // ── Tooltip placement ─────────────────────────────────────────────────────
   const PAD = 16, TW = 280;
@@ -405,26 +446,87 @@ export default function Tutorial({ onDone }: Props) {
               }}>+</div>
             )}
 
-            {/* Terrain badge (after click) — rendered after info bar, sits on top */}
+            {/* Terrain badge (after click) — % + ✕, no gear */}
             {current.id === 'terrain' && terrainAlpha > 0.01 && (
               <div style={{
                 position: 'absolute',
-                top: simPlot.t + 2, left: selLeft,
+                top: simPlot.t + 4, left: selLeft + 4,
                 opacity: terrainAlpha,
                 display: 'flex', gap: 3, alignItems: 'center',
               }}>
                 <div style={{
                   background: 'rgba(0,0,0,0.55)', color: '#fff',
                   border: '1.5px solid transparent', borderRadius: 3,
-                  fontSize: 10, padding: '1px 5px', fontWeight: 700,
-                  lineHeight: 1.6, boxShadow: '0 1px 4px rgba(0,0,0,.35)', whiteSpace: 'nowrap',
-                }}>+5%</div>
+                  fontSize: 10, padding: '0 5px', fontWeight: 700,
+                  height: 18, display: 'flex', alignItems: 'center',
+                  boxShadow: '0 1px 4px rgba(0,0,0,.35)', whiteSpace: 'nowrap',
+                }}>0%</div>
                 <div style={{
                   background: '#f44336', color: '#fff', borderRadius: 3, border: 'none',
-                  fontSize: 13, padding: '0px 5px', lineHeight: 1.6,
+                  fontSize: 8, padding: '0 5px',
+                  height: 18, display: 'flex', alignItems: 'center',
                   boxShadow: '0 1px 4px rgba(0,0,0,.35)',
-                }}>⚙</div>
+                }}>✕</div>
               </div>
+            )}
+            {/* terrain-drag step */}
+            {current.id === 'terrain-drag' && dragAlpha > 0.01 && (
+              <>
+                {/* Terrain rect — color follows dragPct */}
+                <div style={{
+                  position: 'absolute',
+                  left: selLeft, top: simPlot.t,
+                  width: selW, height: simPlot.h,
+                  opacity: dragAlpha,
+                  background: dragBg,
+                  border: `1.5px solid ${dragCol}`,
+                  boxSizing: 'border-box',
+                }} />
+
+                {/* Badge row: ← % ✕ → */}
+                <div style={{
+                  position: 'absolute',
+                  top: simPlot.t + 4, left: selLeft + 4,
+                  opacity: dragAlpha,
+                  display: 'flex', gap: 3, alignItems: 'center',
+                }}>
+                  <span style={{ color: '#fff', fontSize: 10, fontWeight: 700, opacity: leftArrowAlpha, textShadow: '0 1px 3px rgba(0,0,0,.7)', minWidth: 10 }}>←</span>
+                  <div style={{
+                    background: dragCol, color: '#fff', borderRadius: 3,
+                    fontSize: 10, padding: '0 5px', fontWeight: 700,
+                    height: 18, display: 'flex', alignItems: 'center',
+                    boxShadow: '0 1px 4px rgba(0,0,0,.35)', cursor: 'ew-resize',
+                  }}>{Math.round(dragPct) > 0 ? '+' : ''}{Math.round(dragPct)}%</div>
+                  <div style={{
+                    background: dragCol, color: '#fff', borderRadius: 3,
+                    fontSize: 8, padding: '0 5px',
+                    height: 18, display: 'flex', alignItems: 'center',
+                    boxShadow: '0 1px 4px rgba(0,0,0,.35)',
+                  }}>✕</div>
+                  <span style={{ color: '#fff', fontSize: 10, fontWeight: 700, opacity: rightArrowAlpha, textShadow: '0 1px 3px rgba(0,0,0,.7)', minWidth: 10 }}>→</span>
+                </div>
+
+                {/* Info bar — border and duration update with dragPct */}
+                <div style={{
+                  position: 'absolute',
+                  left: infoCx, bottom: infoBot,
+                  transform: 'translateX(-50%)',
+                  opacity: dragAlpha,
+                  background: 'var(--bg-card)',
+                  border: `1px solid ${dragCol}`,
+                  borderRadius: 8, padding: '5px 10px',
+                  fontSize: 11, lineHeight: 1.6,
+                  whiteSpace: 'nowrap', display: 'flex', gap: 8, alignItems: 'center',
+                  boxShadow: '0 2px 8px rgba(0,0,0,.4)',
+                }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>25.0–31.5 km</span>
+                  <strong>6.5 km</strong>
+                  <span>{fmtPace(dragPaceSecPerKm)}<span style={{ color: 'var(--text-hint)', marginLeft: 2 }}>/km avg</span></span>
+                  <span style={{ color: 'var(--yellow)', fontWeight: 600 }}>{fmtSec(dragDurSec)}</span>
+                  <span style={{ color: 'var(--green)', fontWeight: 600 }}>↗320m</span>
+                  <span style={{ color: '#e57373', fontWeight: 600 }}>↘85m</span>
+                </div>
+              </>
             )}
           </div>
         );

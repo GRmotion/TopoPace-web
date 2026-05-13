@@ -1404,6 +1404,7 @@ export default function ElevationChart({
               </div>
             )}
             <button
+              data-tutorial="emoji-btn"
               style={{
                 background: floatingEmoji || emojiPickerOpen ? 'var(--bg-elevated)' : 'var(--bg-card)',
                 border: floatingEmoji || emojiPickerOpen ? '1px solid var(--green)' : '1px solid var(--border)',
@@ -1435,6 +1436,7 @@ export default function ElevationChart({
         )}
         {onNotesChange && (
           <button
+            data-tutorial="note-btn"
             style={{
               background: addingNote !== 'idle' ? 'var(--bg-elevated)' : 'var(--bg-card)',
               border: addingNote !== 'idle' ? '1px solid var(--green)' : '1px solid var(--border)',

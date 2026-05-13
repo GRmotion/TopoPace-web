@@ -299,7 +299,6 @@ export default function Tutorial({ onDone }: Props) {
   // ── Tooltip placement ─────────────────────────────────────────────────────
   const PAD = 16, TW = 280;
   let tipStyle: React.CSSProperties = {};
-  let arrowStyle: React.CSSProperties = {};
 
   if (isEnd) {
     tipStyle = { position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: 340 };
@@ -314,21 +313,17 @@ export default function Tutorial({ onDone }: Props) {
 
     if (placement === 'right') {
       const top = Math.max(PAD, Math.min(vh - 200, cy - 90));
-      tipStyle   = { position: 'fixed', left: rect.left + rect.width + PAD, top, width: TW };
-      arrowStyle = { position: 'fixed', left: rect.left + rect.width + 6, top: top + 16, border: '7px solid transparent', borderRightColor: 'var(--border)' };
+      tipStyle = { position: 'fixed', left: rect.left + rect.width + PAD, top, width: TW };
     } else if (placement === 'left') {
       const top = Math.max(PAD, Math.min(vh - 200, cy - 90));
-      tipStyle   = { position: 'fixed', left: rect.left - PAD - TW, top, width: TW };
-      arrowStyle = { position: 'fixed', left: rect.left - 13, top: top + 16, border: '7px solid transparent', borderLeftColor: 'var(--border)' };
+      tipStyle = { position: 'fixed', left: rect.left - PAD - TW, top, width: TW };
     } else if (placement === 'bottom') {
       const left = Math.max(PAD, Math.min(vw - TW - PAD, cx - TW / 2));
-      tipStyle   = { position: 'fixed', top: rect.top + rect.height + PAD, left, width: TW };
-      arrowStyle = { position: 'fixed', top: rect.top + rect.height + 6, left: cx - 7, border: '7px solid transparent', borderBottomColor: 'var(--border)' };
+      tipStyle = { position: 'fixed', top: rect.top + rect.height + PAD, left, width: TW };
     } else {
       const left   = Math.max(PAD, Math.min(vw - TW - PAD, cx - TW / 2));
       const bottom = vh - rect.top + PAD;
-      tipStyle   = { position: 'fixed', bottom, left, width: TW };
-      arrowStyle = { position: 'fixed', bottom: bottom - 13, left: cx - 7, border: '7px solid transparent', borderTopColor: 'var(--border)' };
+      tipStyle = { position: 'fixed', bottom, left, width: TW };
     }
   }
 
@@ -355,9 +350,6 @@ export default function Tutorial({ onDone }: Props) {
       {!rect && !isEnd && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.58)', zIndex: 4001, pointerEvents: 'none' }} />
       )}
-
-      {/* Arrow */}
-      {rect && !isEnd && <div style={{ ...arrowStyle, zIndex: 4003, pointerEvents: 'none' }} />}
 
       {/* ── Simulation overlay ── */}
       {isSimStep && rect && simPlot && (() => {

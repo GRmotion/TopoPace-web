@@ -87,6 +87,11 @@ export default function App() {
   const mapPanelLeaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const settingsBtnRef = useRef<HTMLButtonElement>(null);
   const chartWrapRef = useRef<HTMLDivElement>(null);
+  const [sidebarAutoHide, setSidebarAutoHide] = useState(() =>
+    localStorage.getItem('topopace_sidebar_autohide') === '1'
+  );
+  const [sidebarPeeking, setSidebarPeeking] = useState(false);
+  const sidebarLeaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (profileMode === 'chart') setChartHeight(h => Math.max(h, 300));
@@ -499,11 +504,57 @@ export default function App() {
       </header>
 
       <main style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-        <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+        <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative' }}>
+
+          {/* Hover strip to peek sidebar when auto-hidden */}
+          {sidebarAutoHide && (
+            <div
+              style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 16, zIndex: 499, cursor: 'e-resize' }}
+              onMouseEnter={() => {
+                if (sidebarLeaveTimerRef.current) clearTimeout(sidebarLeaveTimerRef.current);
+                setSidebarPeeking(true);
+              }}
+            />
+          )}
 
           {/* ── Sidebar ── */}
-          <aside style={{ width: 320, minWidth: 280, background: 'var(--bg-card)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', flexShrink: 0, overflow: 'hidden' }}>
+          <aside
+            style={{
+              width: 320, minWidth: 280,
+              background: 'var(--bg-card)', borderRight: '1px solid var(--border)',
+              display: 'flex', flexDirection: 'column', flexShrink: 0, overflow: 'hidden',
+              ...(sidebarAutoHide ? {
+                position: 'absolute', top: 0, bottom: 0, left: 0, zIndex: 500,
+                transform: sidebarPeeking ? 'translateX(0)' : 'translateX(-100%)',
+                transition: 'transform 200ms cubic-bezier(0,0,0,1)',
+                boxShadow: sidebarPeeking ? '4px 0 24px rgba(0,0,0,0.45)' : 'none',
+              } : {}),
+            }}
+            onMouseEnter={() => {
+              if (!sidebarAutoHide) return;
+              if (sidebarLeaveTimerRef.current) clearTimeout(sidebarLeaveTimerRef.current);
+              setSidebarPeeking(true);
+            }}
+            onMouseLeave={() => {
+              if (!sidebarAutoHide) return;
+              sidebarLeaveTimerRef.current = setTimeout(() => setSidebarPeeking(false), 150);
+            }}
+          >
             <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, padding: 14, minHeight: 0 }}>
+              {/* Sidebar collapse toggle */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: -4 }}>
+                <button
+                  className="ghost"
+                  style={{ fontSize: 14, padding: '2px 7px', lineHeight: 1, color: 'var(--text-hint)' }}
+                  title={sidebarAutoHide ? 'Pin sidebar open' : 'Enable auto-hide'}
+                  onClick={() => {
+                    const next = !sidebarAutoHide;
+                    setSidebarAutoHide(next);
+                    localStorage.setItem('topopace_sidebar_autohide', next ? '1' : '0');
+                    if (!next) setSidebarPeeking(false);
+                  }}
+                >{sidebarAutoHide ? '›' : '‹'}</button>
+              </div>
               {/* Trails button — always visible */}
               <button
                 data-tutorial="trails-btn"

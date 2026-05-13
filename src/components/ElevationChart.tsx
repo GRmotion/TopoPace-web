@@ -885,7 +885,7 @@ export default function ElevationChart({
               onMouseEnter={() => setHoveredNoteId(note.id)}
               onMouseLeave={() => setHoveredNoteId(null)}
             >
-              {len >= 100 && (
+              {len >= 60 && (
                 <line x1={asx} y1={asy} x2={arrowEndX} y2={arrowEndY}
                   className="pn-arrow" stroke="rgba(255,255,255,0.75)" strokeWidth={1.5}
                   markerEnd="url(#note-arrowhead)" clipPath="url(#pc)"
@@ -1244,19 +1244,6 @@ export default function ElevationChart({
               <line x1="9.5" y1="4.5" x2="11.5" y2="6.5" />
             </svg>
           </button>
-        )}
-        {zoomView && (
-          <button
-            style={{
-              background: 'rgba(0,0,0,0.55)', color: 'var(--text-hint)', border: 'none',
-              borderRadius: 3, fontSize: 10, padding: '0 6px', cursor: 'pointer',
-              height: 18, display: 'flex', alignItems: 'center',
-              boxShadow: '0 1px 4px rgba(0,0,0,.35)', userSelect: 'none',
-            }}
-            onMouseDown={e => e.stopPropagation()}
-            onClick={e => { e.stopPropagation(); setZoomView(null); }}
-            title="Reset zoom"
-          >↺ reset</button>
         )}
       </div>
 

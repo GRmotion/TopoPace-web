@@ -1,5 +1,6 @@
 import { useRef, useState, useLayoutEffect, useEffect, useMemo } from 'react';
 import type { TrackPoint, Checkpoint, TrackSegment, TerrainSegment, GelZone, CheckpointResult, GelResult, ProfileNote, ProfileEmoji } from '../models/types';
+import EmojiPicker from './EmojiPicker';
 import { paceAtDist, elapsedMsAtDist, formatTime, formatPace, formatDist, distMAtRaceElapsedMs } from '../algorithm/PacePlanner';
 
 const ML = 50, MR = 14, MT = 10, MB = 28;
@@ -132,8 +133,9 @@ export default function ElevationChart({
   const [midPanning, setMidPanning] = useState(false);
   const [floatingEmoji, setFloatingEmoji] = useState<string | null>(null);
   const [hoveredEmojiId, setHoveredEmojiId] = useState<string | null>(null);
+  const [draggingEmojiId, setDraggingEmojiId] = useState<string | null>(null);
   const [emojiTrayOpen, setEmojiTrayOpen] = useState(false);
-  const emojiInputRef = useRef<HTMLInputElement>(null);
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
   const emojisRef = useRef<ProfileEmoji[]>([]);
 
   useLayoutEffect(() => {
@@ -293,13 +295,35 @@ export default function ElevationChart({
   }, [editingNoteId, onNotesChange]);
 
   useEffect(() => {
-    if (!floatingEmoji) return;
+    if (!floatingEmoji && !emojiPickerOpen) return;
     function onEscKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') { setFloatingEmoji(null); e.preventDefault(); }
+      if (e.key === 'Escape') {
+        if (emojiPickerOpen) setEmojiPickerOpen(false);
+        if (floatingEmoji) setFloatingEmoji(null);
+        e.preventDefault();
+      }
     }
     document.addEventListener('keydown', onEscKey);
     return () => document.removeEventListener('keydown', onEscKey);
-  }, [floatingEmoji]);
+  }, [floatingEmoji, emojiPickerOpen]);
+
+  useEffect(() => {
+    if (!draggingEmojiId) return;
+    function onMoveEmoji(e: MouseEvent) {
+      const svgRect = svgRef.current?.getBoundingClientRect();
+      if (!svgRect) return;
+      const x = e.clientX - svgRect.left;
+      const y = e.clientY - svgRect.top;
+      const { viewStart: vs, viewSpan: vsp, plotW: pw, plotH: ph } = chartStateRef.current;
+      const km = Math.max(vs, Math.min(vs + vsp, vs + ((x - ML) / pw) * vsp));
+      const fracY = Math.max(0, Math.min(1, (y - MT) / ph));
+      onEmojisChange?.(emojisRef.current.map(em => em.id === draggingEmojiId ? { ...em, km, fracY } : em));
+    }
+    function onUpEmoji() { setDraggingEmojiId(null); }
+    document.addEventListener('mousemove', onMoveEmoji);
+    document.addEventListener('mouseup', onUpEmoji);
+    return () => { document.removeEventListener('mousemove', onMoveEmoji); document.removeEventListener('mouseup', onUpEmoji); };
+  }, [draggingEmojiId, onEmojisChange]);
 
   const data = useMemo<DPt[]>(() =>
     points
@@ -614,7 +638,7 @@ export default function ElevationChart({
         ref={svgRef}
         width="100%"
         height={totalSvgH}
-        style={{ display: 'block', cursor: floatingEmoji ? 'none' : midPanning ? 'grabbing' : addingNote !== 'idle' ? 'crosshair' : draggingCpId || hoveredTerrainEdge || resizingTerrain ? 'ew-resize' : (onClickDist || onClickDistTyped) ? 'crosshair' : 'default' }}
+        style={{ display: 'block', cursor: floatingEmoji ? 'none' : draggingEmojiId ? 'grabbing' : midPanning ? 'grabbing' : addingNote !== 'idle' ? 'crosshair' : draggingCpId || hoveredTerrainEdge || resizingTerrain ? 'ew-resize' : (onClickDist || onClickDistTyped) ? 'crosshair' : 'default' }}
         onMouseMove={onMove}
         onMouseLeave={onLeave}
         onMouseDown={onDown}
@@ -999,21 +1023,26 @@ export default function ElevationChart({
           const ex = kmToX(em.km);
           const ey = MT + em.fracY * plotH;
           const isHov = hoveredEmojiId === em.id;
+          const isDragging = draggingEmojiId === em.id;
           return (
             <g key={em.id}
               onMouseEnter={() => setHoveredEmojiId(em.id)}
               onMouseLeave={() => setHoveredEmojiId(null)}
-              style={{ cursor: 'default' }}
             >
               <text x={ex} y={ey} textAnchor="middle" dominantBaseline="central"
-                fontSize={25} clipPath="url(#pc)" style={{ userSelect: 'none', pointerEvents: 'none' }}>{em.emoji}</text>
-              {/* invisible hit area so hover works in all browsers */}
-              <rect x={ex - 14} y={ey - 14} width={28} height={28} fill="transparent" clipPath="url(#pc)" />
-              {isHov && (
+                fontSize={30} clipPath="url(#pc)"
+                style={{ userSelect: 'none', pointerEvents: 'none', opacity: isDragging ? 0.7 : 1 }}
+              >{em.emoji}</text>
+              {/* drag + hover hit area */}
+              <rect x={ex - 16} y={ey - 16} width={32} height={32} fill="transparent" clipPath="url(#pc)"
+                style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
+                onMouseDown={e => { e.stopPropagation(); setDraggingEmojiId(em.id); }}
+              />
+              {isHov && !isDragging && (
                 <g style={{ cursor: 'pointer' }}
                   onClick={e => { e.stopPropagation(); onEmojisChange?.(emojisRef.current.filter(e2 => e2.id !== em.id)); }}>
-                  <circle cx={ex + 9} cy={ey - 9} r={7} fill="rgba(0,0,0,0.5)" />
-                  <text x={ex + 9} y={ey - 9} textAnchor="middle" dominantBaseline="central"
+                  <circle cx={ex + 11} cy={ey - 11} r={7} fill="rgba(0,0,0,0.55)" />
+                  <text x={ex + 11} y={ey - 11} textAnchor="middle" dominantBaseline="central"
                     fill="#fff" fontSize={9} style={{ pointerEvents: 'none' }}>✕</text>
                 </g>
               )}
@@ -1024,7 +1053,7 @@ export default function ElevationChart({
         {/* Floating emoji following cursor */}
         {floatingEmoji && cursorPos && w > 0 && (
           <text x={cursorPos.x} y={cursorPos.y} textAnchor="middle" dominantBaseline="central"
-            fontSize={25} style={{ pointerEvents: 'none', userSelect: 'none' }}>{floatingEmoji}</text>
+            fontSize={30} style={{ pointerEvents: 'none', userSelect: 'none' }}>{floatingEmoji}</text>
         )}
 
         {/* Note placement preview: anchor dot + box following cursor */}
@@ -1323,13 +1352,24 @@ export default function ElevationChart({
 
       {/* Top-right chart buttons: emoji + note */}
       <div style={{ position: 'absolute', top: MT + 4, right: MR + 6, display: 'flex', gap: 4, zIndex: 22 }}>
-        {/* Emoji button with hover tray that slides left */}
+        {/* Emoji picker dropdown */}
+        {emojiPickerOpen && onEmojisChange && (
+          <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 4, zIndex: 50 }}
+            onMouseDown={e => e.stopPropagation()}>
+            <EmojiPicker
+              onSelect={emoji => { setFloatingEmoji(emoji); setEmojiPickerOpen(false); setEmojiTrayOpen(false); }}
+              onClose={() => setEmojiPickerOpen(false)}
+            />
+          </div>
+        )}
+
+        {/* Emoji button with hover tray */}
         {onEmojisChange && (
           <div style={{ position: 'relative' }}
-            onMouseEnter={() => setEmojiTrayOpen(true)}
+            onMouseEnter={() => { if (!emojiPickerOpen) setEmojiTrayOpen(true); }}
             onMouseLeave={() => setEmojiTrayOpen(false)}
           >
-            {emojiTrayOpen && (
+            {emojiTrayOpen && !emojiPickerOpen && (
               <div className="emoji-tray" style={{
                 position: 'absolute', right: '100%', top: 0,
                 display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 0,
@@ -1347,11 +1387,12 @@ export default function ElevationChart({
                     style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, padding: '0 3px', lineHeight: 1, borderRadius: 4 }}
                   >{em}</button>
                 ))}
+                {/* More emoji picker */}
                 <button
                   onMouseDown={e => e.stopPropagation()}
-                  onClick={e => { e.stopPropagation(); emojiInputRef.current?.focus(); }}
+                  onClick={e => { e.stopPropagation(); setEmojiPickerOpen(true); setEmojiTrayOpen(false); }}
                   style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 3px', lineHeight: 1, display: 'flex', alignItems: 'center', borderRadius: 4 }}
-                  title="System emoji picker"
+                  title="More emoji…"
                 >
                   <svg width="18" height="18" viewBox="0 0 20 20" fill="none"
                     stroke="var(--text-secondary)" strokeWidth="1.7" strokeLinecap="round">
@@ -1364,21 +1405,29 @@ export default function ElevationChart({
             )}
             <button
               style={{
-                background: floatingEmoji ? 'var(--bg-elevated)' : 'var(--bg-card)',
-                border: floatingEmoji ? '1px solid var(--green)' : '1px solid var(--border)',
+                background: floatingEmoji || emojiPickerOpen ? 'var(--bg-elevated)' : 'var(--bg-card)',
+                border: floatingEmoji || emojiPickerOpen ? '1px solid var(--green)' : '1px solid var(--border)',
                 borderRadius: 8, padding: 0, cursor: 'pointer',
                 width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center',
                 boxShadow: '0 1px 4px rgba(0,0,0,.35)', userSelect: 'none', flexShrink: 0,
               }}
               onMouseDown={e => e.stopPropagation()}
-              onClick={e => { e.stopPropagation(); if (floatingEmoji) setFloatingEmoji(null); }}
-              title={floatingEmoji ? 'Cancel emoji' : 'Add emoji'}
+              onClick={e => {
+                e.stopPropagation();
+                if (floatingEmoji) { setFloatingEmoji(null); return; }
+                setEmojiPickerOpen(o => !o);
+                setEmojiTrayOpen(false);
+              }}
+              title={floatingEmoji ? 'Cancel emoji' : emojiPickerOpen ? 'Close picker' : 'Add emoji'}
             >
               <svg width="20" height="20" viewBox="0 0 20 20" fill="none"
-                stroke={floatingEmoji ? 'var(--green)' : 'var(--text-secondary)'} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                stroke={floatingEmoji || emojiPickerOpen ? 'var(--green)' : 'var(--text-secondary)'}
+                strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="10" cy="10" r="8" />
-                <circle cx="7.5" cy="8.5" r="0.75" fill={floatingEmoji ? 'var(--green)' : 'var(--text-secondary)'} stroke="none" />
-                <circle cx="12.5" cy="8.5" r="0.75" fill={floatingEmoji ? 'var(--green)' : 'var(--text-secondary)'} stroke="none" />
+                <circle cx="7.5" cy="8.5" r="0.75"
+                  fill={floatingEmoji || emojiPickerOpen ? 'var(--green)' : 'var(--text-secondary)'} stroke="none" />
+                <circle cx="12.5" cy="8.5" r="0.75"
+                  fill={floatingEmoji || emojiPickerOpen ? 'var(--green)' : 'var(--text-secondary)'} stroke="none" />
                 <path d="M7 12 Q10 14.5 13 12" />
               </svg>
             </button>
@@ -1409,22 +1458,6 @@ export default function ElevationChart({
           </button>
         )}
       </div>
-
-      {/* Hidden input for system emoji picker */}
-      <input
-        ref={emojiInputRef}
-        type="text"
-        tabIndex={-1}
-        style={{ position: 'fixed', left: -9999, top: -9999, opacity: 0, width: 1, height: 1 }}
-        onInput={e => {
-          const val = (e.target as HTMLInputElement).value.trim();
-          if (val) {
-            setFloatingEmoji(val);
-            (e.target as HTMLInputElement).value = '';
-            setEmojiTrayOpen(false);
-          }
-        }}
-      />
 
     </div>
   );

@@ -486,10 +486,13 @@ export default function ElevationChart({
     if (!dragRef.current) return;
     const dx = Math.abs(e.clientX - dragRef.current.startClientX);
     if (dx <= 5 && (onClickDist || onClickDistTyped || onAddGelAt)) {
-      // Snap "+" to the elevation line at that km
+      if (selection) {
+        setSelection(null);
+        dragRef.current = null;
+        return;
+      }
       const km = dragRef.current.startKm;
       const nearest = bs(data, km);
-      setSelection(null);
       setPendingMenuOpen(false);
       setPending({
         distM: km * 1000,

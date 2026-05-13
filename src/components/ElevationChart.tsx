@@ -1227,8 +1227,8 @@ export default function ElevationChart({
               background: addingNote !== 'idle' ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.55)',
               color: '#fff',
               border: '1px solid rgba(255,255,255,0.5)',
-              borderRadius: 3, fontSize: 13, padding: 0, cursor: 'pointer',
-              width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              borderRadius: 4, fontSize: 39, padding: 0, cursor: 'pointer',
+              width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center',
               boxShadow: '0 1px 4px rgba(0,0,0,.35)', userSelect: 'none', flexShrink: 0,
             }}
             onMouseDown={e => e.stopPropagation()}

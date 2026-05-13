@@ -7,6 +7,13 @@ export interface ProfileNote {
   text: string;
 }
 
+export interface ProfileEmoji {
+  id: string;
+  emoji: string;
+  km: number;
+  fracY: number;
+}
+
 export interface TrackPoint {
   distFromStart: number; // metres
   ele: number;           // metres

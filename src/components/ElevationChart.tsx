@@ -1,5 +1,5 @@
 import { useRef, useState, useLayoutEffect, useEffect, useMemo } from 'react';
-import type { TrackPoint, Checkpoint, TrackSegment, TerrainSegment, GelZone, CheckpointResult, GelResult, ProfileNote } from '../models/types';
+import type { TrackPoint, Checkpoint, TrackSegment, TerrainSegment, GelZone, CheckpointResult, GelResult, ProfileNote, ProfileEmoji } from '../models/types';
 import { paceAtDist, elapsedMsAtDist, formatTime, formatPace, formatDist, distMAtRaceElapsedMs } from '../algorithm/PacePlanner';
 
 const ML = 50, MR = 14, MT = 10, MB = 28;
@@ -36,6 +36,8 @@ interface Props {
   onResizeTerrain?: (id: string, startKm: number, endKm: number) => void;
   notes?: ProfileNote[];
   onNotesChange?: (notes: ProfileNote[]) => void;
+  emojis?: ProfileEmoji[];
+  onEmojisChange?: (emojis: ProfileEmoji[]) => void;
   onMoveCheckpoint?: (id: string, distM: number) => void;
   gelZones?: GelZone[];
   onGelZonesChange?: (zones: GelZone[]) => void;
@@ -94,6 +96,7 @@ export default function ElevationChart({
   hoverDistM,
   onMarkSelection, onUpdateTerrain, onRemoveTerrain, onResizeTerrain, onMoveCheckpoint,
   notes, onNotesChange,
+  emojis, onEmojisChange,
   results, gelResults, showScheduleLabels,
   timeFormat = '24h', distUnit = 'km', conflictTerrainIds,
 }: Props) {
@@ -127,6 +130,11 @@ export default function ElevationChart({
   const [hoveredNoteId, setHoveredNoteId] = useState<string | null>(null);
   const middleDragRef = useRef<{ startClientX: number; startViewStart: number; startViewEnd: number } | null>(null);
   const [midPanning, setMidPanning] = useState(false);
+  const [floatingEmoji, setFloatingEmoji] = useState<string | null>(null);
+  const [hoveredEmojiId, setHoveredEmojiId] = useState<string | null>(null);
+  const [emojiTrayOpen, setEmojiTrayOpen] = useState(false);
+  const emojiInputRef = useRef<HTMLInputElement>(null);
+  const emojisRef = useRef<ProfileEmoji[]>([]);
 
   useLayoutEffect(() => {
     if (containerRef.current) setW(containerRef.current.clientWidth);
@@ -234,6 +242,7 @@ export default function ElevationChart({
   }, []);
 
   notesRef.current = notes ?? [];
+  emojisRef.current = emojis ?? [];
   editingTextRef.current = editingText;
 
   useEffect(() => {
@@ -282,6 +291,15 @@ export default function ElevationChart({
     document.addEventListener('mousedown', onDocDown, true);
     return () => document.removeEventListener('mousedown', onDocDown, true);
   }, [editingNoteId, onNotesChange]);
+
+  useEffect(() => {
+    if (!floatingEmoji) return;
+    function onEscKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') { setFloatingEmoji(null); e.preventDefault(); }
+    }
+    document.addEventListener('keydown', onEscKey);
+    return () => document.removeEventListener('keydown', onEscKey);
+  }, [floatingEmoji]);
 
   const data = useMemo<DPt[]>(() =>
     points
@@ -425,6 +443,18 @@ export default function ElevationChart({
       return;
     }
     if (e.button !== 0) return;
+    // Drop floating emoji at clicked position
+    if (floatingEmoji) {
+      const { x, y } = getSvgXY(e);
+      const rawKm = viewStart + ((x - ML) / plotW) * viewSpan;
+      const km = Math.max(viewStart, Math.min(viewEnd, rawKm));
+      const fracY = Math.max(0, Math.min(1, (y - MT) / plotH));
+      const newEmoji: ProfileEmoji = { id: crypto.randomUUID(), emoji: floatingEmoji, km, fracY };
+      onEmojisChange?.([...emojisRef.current, newEmoji]);
+      setFloatingEmoji(null);
+      e.preventDefault();
+      return;
+    }
     // Note adding — step 1: pick anchor on elevation line
     if (addingNote === 'anchor') {
       const { x } = getSvgXY(e);
@@ -584,7 +614,7 @@ export default function ElevationChart({
         ref={svgRef}
         width="100%"
         height={totalSvgH}
-        style={{ display: 'block', cursor: midPanning ? 'grabbing' : addingNote !== 'idle' ? 'crosshair' : draggingCpId || hoveredTerrainEdge || resizingTerrain ? 'ew-resize' : (onClickDist || onClickDistTyped) ? 'crosshair' : 'default' }}
+        style={{ display: 'block', cursor: floatingEmoji ? 'none' : midPanning ? 'grabbing' : addingNote !== 'idle' ? 'crosshair' : draggingCpId || hoveredTerrainEdge || resizingTerrain ? 'ew-resize' : (onClickDist || onClickDistTyped) ? 'crosshair' : 'default' }}
         onMouseMove={onMove}
         onMouseLeave={onLeave}
         onMouseDown={onDown}
@@ -964,6 +994,39 @@ export default function ElevationChart({
           );
         })}
 
+        {/* Placed emojis */}
+        {w > 0 && emojis?.map(em => {
+          const ex = kmToX(em.km);
+          const ey = MT + em.fracY * plotH;
+          const isHov = hoveredEmojiId === em.id;
+          return (
+            <g key={em.id}
+              onMouseEnter={() => setHoveredEmojiId(em.id)}
+              onMouseLeave={() => setHoveredEmojiId(null)}
+              style={{ cursor: 'default' }}
+            >
+              <text x={ex} y={ey} textAnchor="middle" dominantBaseline="central"
+                fontSize={20} clipPath="url(#pc)" style={{ userSelect: 'none', pointerEvents: 'none' }}>{em.emoji}</text>
+              {/* invisible hit area so hover works in all browsers */}
+              <rect x={ex - 12} y={ey - 12} width={24} height={24} fill="transparent" clipPath="url(#pc)" />
+              {isHov && (
+                <g style={{ cursor: 'pointer' }}
+                  onClick={e => { e.stopPropagation(); onEmojisChange?.(emojisRef.current.filter(e2 => e2.id !== em.id)); }}>
+                  <circle cx={ex + 9} cy={ey - 9} r={7} fill="rgba(0,0,0,0.5)" />
+                  <text x={ex + 9} y={ey - 9} textAnchor="middle" dominantBaseline="central"
+                    fill="#fff" fontSize={9} style={{ pointerEvents: 'none' }}>✕</text>
+                </g>
+              )}
+            </g>
+          );
+        })}
+
+        {/* Floating emoji following cursor */}
+        {floatingEmoji && cursorPos && w > 0 && (
+          <text x={cursorPos.x} y={cursorPos.y} textAnchor="middle" dominantBaseline="central"
+            fontSize={22} style={{ pointerEvents: 'none', userSelect: 'none' }}>{floatingEmoji}</text>
+        )}
+
         {/* Note placement preview: anchor dot + box following cursor */}
         {w > 0 && addingNote === 'box' && pendingAnchor && cursorPos && (() => {
           const { boxW, boxH } = noteSize('');
@@ -1258,8 +1321,69 @@ export default function ElevationChart({
         </div>
       )}
 
-      {/* Top-right chart buttons: note + zoom reset */}
+      {/* Top-right chart buttons: emoji + note */}
       <div style={{ position: 'absolute', top: MT + 4, right: MR + 6, display: 'flex', gap: 4, zIndex: 22 }}>
+        {/* Emoji button with hover tray that slides left */}
+        {onEmojisChange && (
+          <div style={{ position: 'relative' }}
+            onMouseEnter={() => setEmojiTrayOpen(true)}
+            onMouseLeave={() => setEmojiTrayOpen(false)}
+          >
+            {emojiTrayOpen && (
+              <div style={{
+                position: 'absolute', right: '100%', top: 0,
+                display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 0,
+                height: 34,
+                background: 'rgba(0,0,0,0.55)',
+                border: '1.5px solid rgba(255,255,255,0.5)',
+                borderRadius: 4, padding: '0 4px',
+                boxShadow: '0 1px 4px rgba(0,0,0,.35)',
+                whiteSpace: 'nowrap',
+              }}>
+                {(['☀️', '💩', '💧', '🔥', '🧊'] as const).map(em => (
+                  <button key={em}
+                    onMouseDown={e => e.stopPropagation()}
+                    onClick={e => { e.stopPropagation(); setFloatingEmoji(em); setEmojiTrayOpen(false); }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, padding: '0 3px', lineHeight: 1 }}
+                  >{em}</button>
+                ))}
+                <button
+                  onMouseDown={e => e.stopPropagation()}
+                  onClick={e => { e.stopPropagation(); emojiInputRef.current?.focus(); }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 3px', lineHeight: 1, display: 'flex', alignItems: 'center' }}
+                  title="System emoji picker"
+                >
+                  <svg width="18" height="18" viewBox="0 0 20 20" fill="none"
+                    stroke="rgba(255,255,255,0.75)" strokeWidth="1.7" strokeLinecap="round">
+                    <circle cx="10" cy="10" r="8" />
+                    <line x1="10" y1="6" x2="10" y2="14" />
+                    <line x1="6" y1="10" x2="14" y2="10" />
+                  </svg>
+                </button>
+              </div>
+            )}
+            <button
+              style={{
+                background: floatingEmoji ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.55)',
+                border: '1.5px solid rgba(255,255,255,0.5)',
+                borderRadius: 4, padding: 0, cursor: 'pointer',
+                width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: '0 1px 4px rgba(0,0,0,.35)', userSelect: 'none', flexShrink: 0,
+              }}
+              onMouseDown={e => e.stopPropagation()}
+              onClick={e => { e.stopPropagation(); if (floatingEmoji) setFloatingEmoji(null); }}
+              title={floatingEmoji ? 'Cancel emoji' : 'Add emoji'}
+            >
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none"
+                stroke="rgba(255,255,255,0.9)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="10" cy="10" r="8" />
+                <circle cx="7.5" cy="8.5" r="0.75" fill="rgba(255,255,255,0.9)" stroke="none" />
+                <circle cx="12.5" cy="8.5" r="0.75" fill="rgba(255,255,255,0.9)" stroke="none" />
+                <path d="M7 12 Q10 14.5 13 12" />
+              </svg>
+            </button>
+          </div>
+        )}
         {onNotesChange && (
           <button
             style={{
@@ -1285,6 +1409,22 @@ export default function ElevationChart({
           </button>
         )}
       </div>
+
+      {/* Hidden input for system emoji picker */}
+      <input
+        ref={emojiInputRef}
+        type="text"
+        tabIndex={-1}
+        style={{ position: 'fixed', left: -9999, top: -9999, opacity: 0, width: 1, height: 1 }}
+        onInput={e => {
+          const val = (e.target as HTMLInputElement).value.trim();
+          if (val) {
+            setFloatingEmoji(val);
+            (e.target as HTMLInputElement).value = '';
+            setEmojiTrayOpen(false);
+          }
+        }}
+      />
 
     </div>
   );

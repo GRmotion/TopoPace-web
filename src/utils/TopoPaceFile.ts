@@ -1,4 +1,4 @@
-import type { TrackPoint, Checkpoint, TerrainSegment, GelZone, AdvancedSettings, CalibrationResult, ProfileNote } from '../models/types';
+import type { TrackPoint, Checkpoint, TerrainSegment, GelZone, AdvancedSettings, CalibrationResult, ProfileNote, ProfileEmoji } from '../models/types';
 
 export interface TopoPaceFileData {
   version: 3;
@@ -17,6 +17,7 @@ export interface TopoPaceFileData {
   gelZones: GelZone[];
   advancedSettings: AdvancedSettings;
   notes?: ProfileNote[];
+  emojis?: ProfileEmoji[];
   calibration?: CalibrationResult[];
   mapView?: {
     mapStyle: 'osm' | 'topo' | 'satellite';

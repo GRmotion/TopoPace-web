@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import type { Checkpoint, RunPlan, PersonalProfile, CalibrationResult, CheckpointResult, TerrainSegment, GelZone, AdvancedSettings, UISettings, ProfileNote } from './models/types';
+import type { Checkpoint, RunPlan, PersonalProfile, CalibrationResult, CheckpointResult, TerrainSegment, GelZone, AdvancedSettings, UISettings, ProfileNote, ProfileEmoji } from './models/types';
 import { DEFAULT_PROFILE, DEFAULT_ADVANCED, DEFAULT_UI_SETTINGS } from './models/types';
 import { computeGelZones } from './algorithm/GelAdvisor';
 import type { ParsedRoute } from './parsers/GpxParser';
@@ -95,8 +95,10 @@ export default function App() {
   const [hoverDistM, setHoverDistM] = useState<number | null>(null);
   const [terrainSegs, setTerrainSegs] = useState<TerrainSegment[]>([]);
   const [notes, setNotes] = useState<ProfileNote[]>([]);
+  const [emojis, setEmojis] = useState<ProfileEmoji[]>([]);
 
   const handleNotesChange = useCallback((n: ProfileNote[]) => setNotes(n), []);
+  const handleEmojisChange = useCallback((e: ProfileEmoji[]) => setEmojis(e), []);
 
   // Resizable chart + table heights
   const [chartHeight, setChartHeight] = useState(220);
@@ -284,9 +286,9 @@ export default function App() {
     route: { points: route.points, totalDistM: route.totalDistM, totalElevGainM: route.totalElevGainM },
     goalH, goalMin, raceStartTime,
     checkpoints, terrainSegments: terrainSegs, gelZones, advancedSettings,
-    notes,
+    notes, emojis,
     mapView: { mapStyle, lineMode, lineColor, terrainOverlay },
-  } : null, [route, raceName, goalH, goalMin, raceStartTime, checkpoints, terrainSegs, gelZones, advancedSettings, notes, mapStyle, lineMode, lineColor, terrainOverlay]);
+  } : null, [route, raceName, goalH, goalMin, raceStartTime, checkpoints, terrainSegs, gelZones, advancedSettings, notes, emojis, mapStyle, lineMode, lineColor, terrainOverlay]);
 
   useEffect(() => {
     if (!autoSave || !currentPlanData) return;
@@ -329,6 +331,7 @@ export default function App() {
     setTerrainSegs(data.terrainSegments ?? []);
     setGelZones(data.gelZones ?? []);
     setNotes(data.notes ?? []);
+    setEmojis(data.emojis ?? []);
     setAdvancedSettings(prev => ({ ...prev, ...(data.advancedSettings ?? {}) }));
     if (data.calibration?.length) setCalibrations(data.calibration);
     if (data.gelZones?.length) gelZonesLockedRef.current = true;
@@ -746,6 +749,8 @@ export default function App() {
                       onMoveCheckpoint={handleMoveCheckpoint}
                       notes={notes}
                       onNotesChange={handleNotesChange}
+                      emojis={emojis}
+                      onEmojisChange={handleEmojisChange}
                       results={results as CheckpointResult[]}
                       gelResults={advancedSettings.gelInSchedule ? gelResults : []}
                       showScheduleLabels={profileMode === 'chart'}

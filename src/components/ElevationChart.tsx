@@ -694,12 +694,26 @@ export default function ElevationChart({
         {linePath && <path d={areaPath} fill="url(#eg)" clipPath="url(#pc)" />}
         {linePath && <path d={linePath} fill="none" stroke="#4caf50" strokeWidth={1.5} clipPath="url(#pc)" />}
 
-        {/* Hover hairline + dot */}
+        {/* Hover hairline + dot (or + icon when picking anchor) */}
         {hover && w > 0 && (
           <>
             <line x1={hx} y1={MT} x2={hx} y2={MT + plotH}
               stroke="rgba(255,255,255,0.25)" strokeWidth={1} />
-            <circle cx={hx} cy={hy} r={4} fill="#4caf50" stroke="#fff" strokeWidth={2} />
+            {addingNote === 'anchor' ? (
+              <>
+                <circle cx={hx} cy={hy} r={9}
+                  fill="rgba(255,255,255,0.15)" stroke="rgba(255,255,255,0.7)" strokeWidth={1.5}
+                  style={{ pointerEvents: 'none' }} />
+                <line x1={hx - 5} y1={hy} x2={hx + 5} y2={hy}
+                  stroke="rgba(255,255,255,0.9)" strokeWidth={2} strokeLinecap="round"
+                  style={{ pointerEvents: 'none' }} />
+                <line x1={hx} y1={hy - 5} x2={hx} y2={hy + 5}
+                  stroke="rgba(255,255,255,0.9)" strokeWidth={2} strokeLinecap="round"
+                  style={{ pointerEvents: 'none' }} />
+              </>
+            ) : (
+              <circle cx={hx} cy={hy} r={4} fill="#4caf50" stroke="#fff" strokeWidth={2} />
+            )}
           </>
         )}
 
@@ -982,8 +996,8 @@ export default function ElevationChart({
         );
       })()}
 
-      {/* Hover tooltip */}
-      {hover && w > 0 && (
+      {/* Hover tooltip — hidden while picking note anchor */}
+      {hover && w > 0 && addingNote === 'idle' && (
         <div style={{
           position: 'absolute',
           left: Math.min(hx + 10, w - 130),

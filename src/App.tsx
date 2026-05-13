@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import type { Checkpoint, RunPlan, PersonalProfile, CalibrationResult, CheckpointResult, TerrainSegment, GelZone, AdvancedSettings, UISettings } from './models/types';
+import type { Checkpoint, RunPlan, PersonalProfile, CalibrationResult, CheckpointResult, TerrainSegment, GelZone, AdvancedSettings, UISettings, ProfileNote } from './models/types';
 import { DEFAULT_PROFILE, DEFAULT_ADVANCED, DEFAULT_UI_SETTINGS } from './models/types';
 import { computeGelZones } from './algorithm/GelAdvisor';
 import type { ParsedRoute } from './parsers/GpxParser';
@@ -62,7 +62,7 @@ export default function App() {
   const [profileMode, setProfileMode] = useState<'table' | 'chart'>('chart');
   const [trailsOpen, setTrailsOpen] = useState(false);
   const [tutorialActive, setTutorialActive] = useState(false);
-  const [autoSave, setAutoSave] = useState(() => localStorage.getItem(AUTOSAVE_ENABLED_KEY) === '1');
+  const [autoSave, setAutoSave] = useState(() => localStorage.getItem(AUTOSAVE_ENABLED_KEY) !== '0');
   const [autoSaveStatus, setAutoSaveStatus] = useState<'saving' | 'saved' | null>(null);
   const autoSaveIdRef = useRef<string>(localStorage.getItem(AUTOSAVE_ID_KEY) ?? '');
   const clearSavedRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -94,6 +94,9 @@ export default function App() {
 
   const [hoverDistM, setHoverDistM] = useState<number | null>(null);
   const [terrainSegs, setTerrainSegs] = useState<TerrainSegment[]>([]);
+  const [notes, setNotes] = useState<ProfileNote[]>([]);
+
+  const handleNotesChange = useCallback((n: ProfileNote[]) => setNotes(n), []);
 
   // Resizable chart + table heights
   const [chartHeight, setChartHeight] = useState(220);
@@ -239,6 +242,10 @@ export default function App() {
     setTerrainSegs(prev => prev.map(t => t.id === id ? { ...t, difficultyPercent } : t));
   }, []);
 
+  const handleResizeTerrain = useCallback((id: string, startKm: number, endKm: number) => {
+    setTerrainSegs(prev => prev.map(t => t.id === id ? { ...t, startKm, endKm } : t));
+  }, []);
+
   const [removedTerrain, setRemovedTerrain] = useState<{ seg: TerrainSegment; index: number } | null>(null);
   const terrainUndoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -277,8 +284,9 @@ export default function App() {
     route: { points: route.points, totalDistM: route.totalDistM, totalElevGainM: route.totalElevGainM },
     goalH, goalMin, raceStartTime,
     checkpoints, terrainSegments: terrainSegs, gelZones, advancedSettings,
+    notes,
     mapView: { mapStyle, lineMode, lineColor, terrainOverlay },
-  } : null, [route, raceName, goalH, goalMin, raceStartTime, checkpoints, terrainSegs, gelZones, advancedSettings, mapStyle, lineMode, lineColor, terrainOverlay]);
+  } : null, [route, raceName, goalH, goalMin, raceStartTime, checkpoints, terrainSegs, gelZones, advancedSettings, notes, mapStyle, lineMode, lineColor, terrainOverlay]);
 
   useEffect(() => {
     if (!autoSave || !currentPlanData) return;
@@ -320,6 +328,7 @@ export default function App() {
     setCheckpoints(data.checkpoints ?? []);
     setTerrainSegs(data.terrainSegments ?? []);
     setGelZones(data.gelZones ?? []);
+    setNotes(data.notes ?? []);
     setAdvancedSettings(prev => ({ ...prev, ...(data.advancedSettings ?? {}) }));
     if (data.calibration?.length) setCalibrations(data.calibration);
     if (data.gelZones?.length) gelZonesLockedRef.current = true;
@@ -369,6 +378,16 @@ export default function App() {
       .replace(/var\(--green\)/g, '#2e7d32')
       .replace(/var\(--yellow\)/g, '#b8860b')
       .replace(/var\(--red\)/g, '#b71c1c');
+    // Inject print style for profile notes and hide delete buttons
+    const printStyle = `<style>
+.pn-box { fill: rgba(0,0,0,0.08) !important; stroke: rgba(0,0,0,0.8) !important; }
+.pn-text { fill: rgba(0,0,0,1) !important; }
+.pn-arrow { stroke: rgba(0,0,0,0.75) !important; }
+.pn-anchor { fill: rgba(0,0,0,0.85) !important; }
+.pn-arrowhead { fill: rgba(0,0,0,0.75) !important; }
+.pn-delete { display: none !important; }
+</style>`;
+    svg = svg.replace('<defs>', `${printStyle}<defs>`);
     return svg;
   }, []);
 
@@ -587,12 +606,12 @@ export default function App() {
                 >
                   {mapPanelExpanded ? (
                     <div className="anim-pop" style={{
-                      padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10, minWidth: 140,
+                      padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 16, minWidth: 148,
                     }}>
                       {/* Map style */}
                       <div>
-                        <label style={{ display: 'block', marginBottom: 4 }}>Map</label>
-                        <div style={{ display: 'flex', gap: 4 }}>
+                        <label style={{ display: 'block', marginBottom: 6 }}>Map</label>
+                        <div style={{ display: 'flex', gap: 5 }}>
                           {(['osm', 'topo', 'satellite'] as const).map(s => (
                             <button key={s} className={mapStyle === s ? 'primary' : 'ghost'}
                               style={{ fontSize: 12, padding: '3px 6px', flex: 1 }}
@@ -604,8 +623,8 @@ export default function App() {
                       </div>
                       {/* Line color */}
                       <div>
-                        <label style={{ display: 'block', marginBottom: 4 }}>Line</label>
-                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 4 }}>
+                        <label style={{ display: 'block', marginBottom: 6 }}>Line</label>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
                           {['#ffd54f', '#4caf50', '#2196f3', '#f44336', '#ffffff', '#e040fb'].map(c => (
                             <div key={c} onClick={() => setUiSettings(u => ({ ...u, lineMode: 'solid', lineColor: c }))}
                               style={{
@@ -615,7 +634,7 @@ export default function App() {
                               }} />
                           ))}
                         </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                           {([
                             { mode: 'elevation', label: '↑ Elevation' },
                             { mode: 'speed',     label: '⚡ Speed' },
@@ -629,7 +648,7 @@ export default function App() {
                       {/* Terrain overlay */}
                       {terrainSegs.length > 0 && (
                         <div>
-                          <label style={{ display: 'block', marginBottom: 4 }}>Terrain</label>
+                          <label style={{ display: 'block', marginBottom: 6 }}>Terrain</label>
                           <button
                             className={terrainOverlay ? 'primary' : 'ghost'}
                             style={{ fontSize: 12, padding: '3px 8px', width: '100%', textAlign: 'left' }}
@@ -640,7 +659,7 @@ export default function App() {
                       {/* Gel visibility */}
                       {advancedSettings.gelEnabled && gelZones.length > 0 && (
                         <div>
-                          <label style={{ display: 'block', marginBottom: 4 }}>Gels</label>
+                          <label style={{ display: 'block', marginBottom: 6 }}>Gels</label>
                           <button
                             className={uiSettings.showGels ? 'primary' : 'ghost'}
                             style={{ fontSize: 12, padding: '3px 8px', width: '100%', textAlign: 'left' }}
@@ -723,7 +742,10 @@ export default function App() {
                       onMarkSelection={handleMarkSelection}
                       onUpdateTerrain={handleUpdateTerrain}
                       onRemoveTerrain={handleRemoveTerrain}
+                      onResizeTerrain={handleResizeTerrain}
                       onMoveCheckpoint={handleMoveCheckpoint}
+                      notes={notes}
+                      onNotesChange={handleNotesChange}
                       results={results as CheckpointResult[]}
                       gelResults={advancedSettings.gelInSchedule ? gelResults : []}
                       showScheduleLabels={profileMode === 'chart'}

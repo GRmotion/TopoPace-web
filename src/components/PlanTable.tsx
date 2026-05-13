@@ -93,7 +93,7 @@ export default function PlanTable({ results, gelResults = [], onAdjustStop, time
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}>
                       <button className="ghost" style={{ width: 22, height: 22, padding: 0, fontSize: 14 }}
                         onClick={() => onAdjustStop(r.id, -1)}>−</button>
-                      <span style={{ minWidth: 28, textAlign: 'center' }}>{r.plannedStopMin}m</span>
+                      <span style={{ minWidth: 36, textAlign: 'center' }}>{r.plannedStopMin}min</span>
                       <button className="ghost" style={{ width: 22, height: 22, padding: 0, fontSize: 14 }}
                         onClick={() => onAdjustStop(r.id, 1)}>+</button>
                     </div>

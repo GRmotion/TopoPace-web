@@ -340,23 +340,22 @@ export default function ElevationChart({
 
   const sunSamples = useMemo(() => {
     if (!sunDate || !segments?.length || !raceStartTime || data.length < 2) return null;
-    // raceStartTime is local time at race location — convert to UTC using tzOffset
-    const [hh, mm] = raceStartTime.split(':').map(Number);
-    const localMs = (hh * 60 + mm) * 60_000;
-    const tzOffsetMs = sunTzOffset * 3_600_000;
+    // elapsedMsAtDist returns (startMs + elapsed) — ms from LOCAL midnight of the race day.
+    // Convert to UTC: subtract tzOffset.
     const [yr, mo, dy] = sunDate.split('-').map(Number);
-    const startUTC = new Date(Date.UTC(yr, mo - 1, dy) + localMs - tzOffsetMs);
+    const dateMidnightUTC = Date.UTC(yr, mo - 1, dy);
+    const tzOffsetMs = sunTzOffset * 3_600_000;
 
-    // 300 uniformly-spaced km samples across the full route
     const minKmS = data[0].km;
     const maxKmS = data[data.length - 1].km;
     const STEPS  = 300;
     const out: { km: number; el: number }[] = [];
     for (let i = 0; i <= STEPS; i++) {
-      const km  = minKmS + (i / STEPS) * (maxKmS - minKmS);
-      const elMs = elapsedMsAtDist(segments, checkpoints, raceStartTime, km * 1000);
-      if (elMs == null) continue;
-      out.push({ km, el: solarElevationDeg(new Date(startUTC.getTime() + elMs), avgLat, avgLon) });
+      const km      = minKmS + (i / STEPS) * (maxKmS - minKmS);
+      const localMs = elapsedMsAtDist(segments, checkpoints, raceStartTime, km * 1000);
+      // localMs = ms from midnight local time → UTC = dateMidnightUTC + localMs - tzOffsetMs
+      const utcDate = new Date(dateMidnightUTC + localMs - tzOffsetMs);
+      out.push({ km, el: solarElevationDeg(utcDate, avgLat, avgLon) });
     }
     return out.length >= 2 ? out : null;
   }, [sunDate, sunTzOffset, segments, checkpoints, raceStartTime, data, avgLat, avgLon]);

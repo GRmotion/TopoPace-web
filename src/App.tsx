@@ -383,6 +383,8 @@ export default function App() {
 .pn-box { fill: rgba(0,0,0,0.08) !important; stroke: rgba(0,0,0,0.8) !important; }
 .pn-text { fill: rgba(0,0,0,1) !important; }
 .pn-arrow { stroke: rgba(0,0,0,0.75) !important; }
+.pn-anchor { fill: rgba(0,0,0,0.85) !important; }
+.pn-arrowhead { fill: rgba(0,0,0,0.75) !important; }
 .pn-delete { display: none !important; }
 </style>`;
     svg = svg.replace('<defs>', `${printStyle}<defs>`);

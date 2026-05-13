@@ -3,16 +3,17 @@ import type { TrackPoint, Checkpoint, TrackSegment, TerrainSegment, GelZone, Che
 import { paceAtDist, elapsedMsAtDist, formatTime, formatPace, formatDist, distMAtRaceElapsedMs } from '../algorithm/PacePlanner';
 
 const ML = 50, MR = 14, MT = 10, MB = 28;
-const NOTE_FONT = 12, NOTE_LINE_H = 17, NOTE_CHAR_W = 7, NOTE_PAD = 10, NOTE_MIN = NOTE_FONT * 3;
+const NOTE_FONT = 12, NOTE_LINE_H = 17, NOTE_CHAR_W = 7, NOTE_PAD = 10;
+const NOTE_MIN_W = 60;
 
 function noteSize(text: string) {
   const lines = text ? text.split('\n') : [''];
   const textH = (lines.length - 1) * NOTE_LINE_H + NOTE_FONT;
-  const maxW = Math.max(NOTE_MIN, ...lines.map(l => l.length * NOTE_CHAR_W));
+  const maxW = Math.max(NOTE_MIN_W, ...lines.map(l => l.length * NOTE_CHAR_W));
   return {
     lines,
-    boxW: Math.max(NOTE_MIN, maxW) + NOTE_PAD * 2,
-    boxH: Math.max(NOTE_MIN, textH) + NOTE_PAD * 2,
+    boxW: maxW + NOTE_PAD * 2,
+    boxH: textH + NOTE_PAD * 2,
     textH,
   };
 }
@@ -121,6 +122,7 @@ export default function ElevationChart({
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState('');
   const [draggingNote, setDraggingNote] = useState<{ id: string; startClientX: number; startClientY: number } | null>(null);
+  const [cursorPos, setCursorPos] = useState<{ x: number; y: number } | null>(null);
 
   useLayoutEffect(() => {
     if (containerRef.current) setW(containerRef.current.clientWidth);
@@ -324,7 +326,8 @@ export default function ElevationChart({
 
   // Events
   function onMove(e: React.MouseEvent<SVGSVGElement>) {
-    const { x } = getSvgXY(e);
+    const { x, y } = getSvgXY(e);
+    setCursorPos({ x, y });
     const km = svgXToKm(x);
     if (km == null) {
       if (!dragRef.current && !draggingGelId && !draggingCpId) { setHover(null); onHoverDist?.(null); }
@@ -363,6 +366,7 @@ export default function ElevationChart({
   }
 
   function onLeave() {
+    setCursorPos(null);
     if (!dragRef.current && !draggingGelId && !draggingCpId) { setHover(null); onHoverDist?.(null); }
     if (draggingGelId) setDraggingGelId(null);
     if (draggingCpId) setDraggingCpId(null);
@@ -543,7 +547,7 @@ export default function ElevationChart({
             <rect x={ML} y={MT} width={plotW} height={plotH} />
           </clipPath>
           <marker id="note-arrowhead" markerWidth="6" markerHeight="6" refX="5.5" refY="3" orient="auto">
-            <polygon points="0 0.5, 6 3, 0 5.5" fill="rgba(255,255,255,0.75)" />
+            <polygon className="pn-arrowhead" points="0 0.5, 6 3, 0 5.5" fill="rgba(255,255,255,0.75)" />
           </marker>
         </defs>
 
@@ -680,7 +684,7 @@ export default function ElevationChart({
         {w > 0 && notes?.map(note => {
           const isEditing = editingNoteId === note.id;
           const textForSize = isEditing ? editingText : note.text;
-          const { lines, boxW, boxH, textH } = noteSize(textForSize);
+          const { lines, boxW, boxH } = noteSize(textForSize);
           const bx = kmToX(note.boxKm);
           const by = MT + note.boxFracY * plotH;
           const ax = kmToX(note.anchorKm);
@@ -689,19 +693,22 @@ export default function ElevationChart({
           const hw = boxW / 2, hh = boxH / 2;
           const tMin = Math.min(Math.abs(dx) > 0.01 ? hw / Math.abs(dx) : Infinity, Math.abs(dy) > 0.01 ? hh / Math.abs(dy) : Infinity);
           const asx = bx + tMin * dx, asy = by + tMin * dy;
-          const contentH = boxH - 2 * NOTE_PAD;
-          const firstLineY = by - hh + NOTE_PAD + NOTE_FONT + (contentH - Math.max(NOTE_MIN, textH)) / 2;
+          const firstLineY = by - hh + NOTE_PAD + NOTE_FONT;
+          const len = Math.sqrt(dx * dx + dy * dy);
+          const gap = 3.5 + 20;
+          const arrowEndX = len > gap ? ax - (dx / len) * gap : ax;
+          const arrowEndY = len > gap ? ay - (dy / len) * gap : ay;
           return (
             <g key={note.id}>
-              <line x1={asx} y1={asy} x2={ax} y2={ay}
+              <line x1={asx} y1={asy} x2={arrowEndX} y2={arrowEndY}
                 className="pn-arrow" stroke="rgba(255,255,255,0.75)" strokeWidth={1.5}
                 markerEnd="url(#note-arrowhead)" clipPath="url(#pc)"
                 style={{ pointerEvents: 'none' }} />
               <circle cx={ax} cy={ay} r={3.5}
-                fill="rgba(255,255,255,0.85)" clipPath="url(#pc)"
+                className="pn-anchor" fill="rgba(255,255,255,0.85)" clipPath="url(#pc)"
                 style={{ pointerEvents: 'none' }} />
               <rect x={bx - hw} y={by - hh} width={boxW} height={boxH}
-                rx={15} ry={15}
+                rx={10} ry={10}
                 className="pn-box" fill="rgba(255,255,255,0.4)" stroke="rgba(255,255,255,0.8)" strokeWidth={1.5}
                 clipPath="url(#pc)"
                 style={{ cursor: 'move' }}
@@ -729,12 +736,33 @@ export default function ElevationChart({
           );
         })}
 
-        {/* Note-adding previews */}
-        {w > 0 && addingNote === 'box' && pendingAnchor && (
-          <circle cx={kmToX(pendingAnchor.km)} cy={eleToY(pendingAnchor.ele)} r={5}
-            fill="rgba(255,255,255,0.9)" stroke="rgba(255,255,255,0.5)" strokeWidth={2}
-            style={{ pointerEvents: 'none' }} />
-        )}
+        {/* Note placement preview: anchor dot + box following cursor */}
+        {w > 0 && addingNote === 'box' && pendingAnchor && cursorPos && (() => {
+          const { boxW, boxH } = noteSize('');
+          const bx = cursorPos.x, by = cursorPos.y;
+          const ax = kmToX(pendingAnchor.km), ay = eleToY(pendingAnchor.ele);
+          const dx = ax - bx, dy = ay - by;
+          const hw = boxW / 2, hh = boxH / 2;
+          const tMin = Math.min(Math.abs(dx) > 0.01 ? hw / Math.abs(dx) : Infinity, Math.abs(dy) > 0.01 ? hh / Math.abs(dy) : Infinity);
+          const asx = bx + tMin * dx, asy = by + tMin * dy;
+          const len = Math.sqrt(dx * dx + dy * dy);
+          const gap = 3.5 + 20;
+          const arrowEndX = len > gap ? ax - (dx / len) * gap : ax;
+          const arrowEndY = len > gap ? ay - (dy / len) * gap : ay;
+          return (
+            <g style={{ pointerEvents: 'none' }}>
+              <line x1={asx} y1={asy} x2={arrowEndX} y2={arrowEndY}
+                stroke="rgba(255,255,255,0.75)" strokeWidth={1.5}
+                markerEnd="url(#note-arrowhead)" clipPath="url(#pc)" />
+              <circle cx={ax} cy={ay} r={3.5}
+                fill="rgba(255,255,255,0.85)" clipPath="url(#pc)" />
+              <rect x={bx - hw} y={by - hh} width={boxW} height={boxH}
+                rx={10} ry={10}
+                fill="rgba(255,255,255,0.4)" stroke="rgba(255,255,255,0.8)" strokeWidth={1.5}
+                clipPath="url(#pc)" />
+            </g>
+          );
+        })()}
 
         {/* Hover hairline + dot */}
         {hover && w > 0 && (
@@ -917,7 +945,7 @@ export default function ElevationChart({
               resize: 'none',
               background: 'rgba(255,255,255,0.4)',
               border: '1.5px solid rgba(255,255,255,0.8)',
-              borderRadius: 15,
+              borderRadius: 10,
               color: 'rgba(255,255,255,1)',
               fontSize: NOTE_FONT,
               fontFamily: 'system-ui,Arial,sans-serif',
@@ -1155,9 +1183,10 @@ export default function ElevationChart({
         {onNotesChange && (
           <button
             style={{
-              background: addingNote !== 'idle' ? 'rgba(76,175,80,0.55)' : 'rgba(0,0,0,0.55)',
-              color: addingNote !== 'idle' ? '#fff' : 'var(--text-hint)',
-              border: 'none', borderRadius: 3, fontSize: 10, padding: '0 6px', cursor: 'pointer',
+              background: addingNote !== 'idle' ? 'rgba(76,175,80,0.35)' : 'rgba(0,0,0,0.55)',
+              color: '#4caf50',
+              border: '1px solid rgba(76,175,80,0.6)',
+              borderRadius: 3, fontSize: 10, padding: '0 6px', cursor: 'pointer',
               height: 18, display: 'flex', alignItems: 'center',
               boxShadow: '0 1px 4px rgba(0,0,0,.35)', userSelect: 'none',
             }}

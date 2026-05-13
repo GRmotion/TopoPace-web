@@ -125,6 +125,8 @@ export default function ElevationChart({
   const [draggingNote, setDraggingNote] = useState<{ id: string; startClientX: number; startClientY: number } | null>(null);
   const [cursorPos, setCursorPos] = useState<{ x: number; y: number } | null>(null);
   const [hoveredNoteId, setHoveredNoteId] = useState<string | null>(null);
+  const middleDragRef = useRef<{ startClientX: number; startViewStart: number; startViewEnd: number } | null>(null);
+  const [midPanning, setMidPanning] = useState(false);
 
   useLayoutEffect(() => {
     if (containerRef.current) setW(containerRef.current.clientWidth);
@@ -141,6 +143,31 @@ export default function ElevationChart({
     window.addEventListener('mouseup', up);
     return () => window.removeEventListener('mouseup', up);
   }, []);
+  useEffect(() => {
+    function onMidUp(e: MouseEvent) {
+      if (e.button === 1) { middleDragRef.current = null; setMidPanning(false); }
+    }
+    document.addEventListener('mouseup', onMidUp);
+    return () => document.removeEventListener('mouseup', onMidUp);
+  }, []);
+  useEffect(() => {
+    if (!midPanning) return;
+    function onMidMove(e: MouseEvent) {
+      if (!middleDragRef.current) return;
+      const { startClientX, startViewStart, startViewEnd } = middleDragRef.current;
+      const { plotW: pw, minKm: mk, maxKm: mxk } = chartStateRef.current;
+      const span = startViewEnd - startViewStart;
+      const deltaKm = ((e.clientX - startClientX) / pw) * span;
+      let ns = startViewStart - deltaKm;
+      let ne = startViewEnd - deltaKm;
+      if (ns < mk) { ne = Math.min(mxk, ne + (mk - ns)); ns = mk; }
+      if (ne > mxk) { ns = Math.max(mk, ns - (ne - mxk)); ne = mxk; }
+      if (ns <= mk + 0.001 && ne >= mxk - 0.001) setZoomView(null);
+      else setZoomView({ start: ns, end: ne });
+    }
+    document.addEventListener('mousemove', onMidMove);
+    return () => document.removeEventListener('mousemove', onMidMove);
+  }, [midPanning]);
   useEffect(() => {
     if (!draggingTerrain) return;
     function onMove(e: MouseEvent) {
@@ -389,6 +416,14 @@ export default function ElevationChart({
   }
 
   function onDown(e: React.MouseEvent<SVGSVGElement>) {
+    if (e.button === 1) {
+      e.preventDefault();
+      if (zoomView) {
+        middleDragRef.current = { startClientX: e.clientX, startViewStart: viewStart, startViewEnd: viewEnd };
+        setMidPanning(true);
+      }
+      return;
+    }
     if (e.button !== 0) return;
     // Note adding — step 1: pick anchor on elevation line
     if (addingNote === 'anchor') {
@@ -546,7 +581,7 @@ export default function ElevationChart({
         ref={svgRef}
         width="100%"
         height={totalSvgH}
-        style={{ display: 'block', cursor: addingNote !== 'idle' ? 'crosshair' : draggingCpId || hoveredTerrainEdge || resizingTerrain ? 'ew-resize' : (onClickDist || onClickDistTyped) ? 'crosshair' : 'default' }}
+        style={{ display: 'block', cursor: midPanning ? 'grabbing' : addingNote !== 'idle' ? 'crosshair' : draggingCpId || hoveredTerrainEdge || resizingTerrain ? 'ew-resize' : zoomView ? 'grab' : (onClickDist || onClickDistTyped) ? 'crosshair' : 'default' }}
         onMouseMove={onMove}
         onMouseLeave={onLeave}
         onMouseDown={onDown}
@@ -885,7 +920,7 @@ export default function ElevationChart({
               onMouseEnter={() => setHoveredNoteId(note.id)}
               onMouseLeave={() => setHoveredNoteId(null)}
             >
-              {len >= 60 && (
+              {len >= 80 && (
                 <line x1={asx} y1={asy} x2={arrowEndX} y2={arrowEndY}
                   className="pn-arrow" stroke="rgba(255,255,255,0.75)" strokeWidth={1.5}
                   markerEnd="url(#note-arrowhead)" clipPath="url(#pc)"

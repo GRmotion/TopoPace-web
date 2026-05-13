@@ -1,7 +1,7 @@
 import { useRef, useState, useLayoutEffect, useEffect, useMemo } from 'react';
 import type { TrackPoint, Checkpoint, TrackSegment, TerrainSegment, GelZone, CheckpointResult, GelResult, ProfileNote, ProfileEmoji } from '../models/types';
 import EmojiPicker from './EmojiPicker';
-import { paceAtDist, elapsedMsAtDist, formatTime, formatPace, formatDist, distMAtRaceElapsedMs } from '../algorithm/PacePlanner';
+import { paceAtDist, elapsedMsAtDist, formatTime, formatPace, formatDist, distMAtRaceElapsedMs, parseTimeToMs } from '../algorithm/PacePlanner';
 import { solarElevationDeg } from '../utils/solar';
 
 const ML = 50, MR = 14, MT = 10, MB = 28;
@@ -340,21 +340,32 @@ export default function ElevationChart({
 
   const sunSamples = useMemo(() => {
     if (!sunDate || !segments?.length || !raceStartTime || data.length < 2) return null;
-    // elapsedMsAtDist returns (startMs + elapsed) — ms from LOCAL midnight of the race day.
-    // Convert to UTC: subtract tzOffset.
     const [yr, mo, dy] = sunDate.split('-').map(Number);
     const dateMidnightUTC = Date.UTC(yr, mo - 1, dy);
     const tzOffsetMs = sunTzOffset * 3_600_000;
+    const startMs = parseTimeToMs(raceStartTime); // ms from midnight
 
-    const minKmS = data[0].km;
-    const maxKmS = data[data.length - 1].km;
-    const STEPS  = 300;
+    // Sample uniformly in TIME so the sun arc looks like a smooth sine
+    const totalDistM = data[data.length - 1].km * 1000;
+    const endLocalMs = elapsedMsAtDist(segments, checkpoints, raceStartTime, totalDistM);
+    const totalElapsedMs = endLocalMs - startMs;
+    if (totalElapsedMs <= 0) return null;
+
+    const STEPS = 300;
     const out: { km: number; el: number }[] = [];
     for (let i = 0; i <= STEPS; i++) {
-      const km      = minKmS + (i / STEPS) * (maxKmS - minKmS);
-      const localMs = elapsedMsAtDist(segments, checkpoints, raceStartTime, km * 1000);
-      // localMs = ms from midnight local time → UTC = dateMidnightUTC + localMs - tzOffsetMs
-      const utcDate = new Date(dateMidnightUTC + localMs - tzOffsetMs);
+      const elapsed = (i / STEPS) * totalElapsedMs; // pure elapsed ms from race start
+      let km: number;
+      if (i === 0) {
+        km = data[0].km;
+      } else if (i === STEPS) {
+        km = data[data.length - 1].km;
+      } else {
+        const distM = distMAtRaceElapsedMs(segments, checkpoints, raceStartTime, elapsed);
+        km = distM != null ? distM / 1000 : data[data.length - 1].km;
+      }
+      // localMs from midnight = startMs + elapsed
+      const utcDate = new Date(dateMidnightUTC + startMs + elapsed - tzOffsetMs);
       out.push({ km, el: solarElevationDeg(utcDate, avgLat, avgLon) });
     }
     return out.length >= 2 ? out : null;
@@ -432,7 +443,7 @@ export default function ElevationChart({
     if (!sunSamples || w === 0) return null;
     const px = sunSamples.map(s => ({
       x: kmToX(s.km),
-      y: MT + (1 - (s.el + 6) / 96) * plotH,
+      y: MT + (1 - (s.el + 3) / 80) * plotH,
     }));
     if (px.length < 2) return null;
     let d = `M ${px[0].x.toFixed(1)},${px[0].y.toFixed(1)}`;
@@ -825,7 +836,8 @@ export default function ElevationChart({
                         style={{ pointerEvents: 'none' }}
                       />
                     )}
-                    <text x={x} y={MT + 36} textAnchor="middle" fill="#000"
+                    <text x={x} y={cp.type === 'aid' ? MT + 36 : MT + 38}
+                      textAnchor="middle" fill="#000"
                       fontSize={9} fontWeight="700" clipPath="url(#pc)"
                       style={{ pointerEvents: 'none' }}
                     >{num}</text>
@@ -843,10 +855,17 @@ export default function ElevationChart({
         {linePath && <path d={linePath} fill="none" stroke="#4caf50" strokeWidth={1.5} clipPath="url(#pc)" />}
 
         {/* Sun elevation line */}
-        {sunLinePath && (
-          <path d={sunLinePath} fill="none" stroke="#ffd54f" strokeWidth={2}
-            strokeOpacity={0.5} clipPath="url(#pc)" style={{ pointerEvents: 'none' }} />
-        )}
+        {sunLinePath && sunSamples && (() => {
+          const firstY = MT + (1 - (sunSamples[0].el + 3) / 80) * plotH;
+          const labelY = Math.max(MT + 10, Math.min(MT + plotH - 4, firstY));
+          return (<>
+            <path className="sun-line" d={sunLinePath} fill="none" stroke="#ffd54f" strokeWidth={2}
+              strokeOpacity={0.5} clipPath="url(#pc)" style={{ pointerEvents: 'none' }} />
+            <text className="sun-label" x={ML - 4} y={labelY} textAnchor="end"
+              fontSize={11} fill="#ffd54f" fillOpacity={0.7} dominantBaseline="middle"
+              style={{ pointerEvents: 'none', userSelect: 'none' }}>☀</text>
+          </>);
+        })()}
 
         {/* Hover hairline + dot (or + icon when picking anchor) */}
         {hover && w > 0 && (
@@ -944,27 +963,31 @@ export default function ElevationChart({
                       {(() => {
                         const isAidBadge = (item.data as CheckpointResult).type === 'aid';
                         const cy = baseY + topY + badgeR;
-                        return isAidBadge ? (
-                          <circle cx={bx} cy={cy} r={badgeR} fill={col} />
-                        ) : (
-                          <path
-                            d={`M${bx-1.3} ${cy-5.7} Q${bx} ${cy-8} ${bx+1.3} ${cy-5.7} L${bx+7.1} ${cy+4.4} Q${bx+8.4} ${cy+6.7} ${bx+5.8} ${cy+6.7} L${bx-5.8} ${cy+6.7} Q${bx-8.4} ${cy+6.7} ${bx-7.1} ${cy+4.4} Z`}
-                            fill={col}
-                          />
-                        );
+                        // POI triangle numbers sit 2 px lower than aid circle numbers (both shifted 1 px up)
+                        const numY = cy + 3 + (isAidBadge ? 0 : 2);
+                        return (<>
+                          {isAidBadge ? (
+                            <circle cx={bx} cy={cy} r={badgeR} fill={col} />
+                          ) : (
+                            <path
+                              d={`M${bx-1.3} ${cy-5.7} Q${bx} ${cy-8} ${bx+1.3} ${cy-5.7} L${bx+7.1} ${cy+4.4} Q${bx+8.4} ${cy+6.7} ${bx+5.8} ${cy+6.7} L${bx-5.8} ${cy+6.7} Q${bx-8.4} ${cy+6.7} ${bx-7.1} ${cy+4.4} Z`}
+                              fill={col}
+                            />
+                          )}
+                          <text x={bx} y={numY}
+                            textAnchor="middle" fontSize={9} fill="#000" fontWeight="800"
+                            fontFamily="Arial,sans-serif">
+                            {(item as { kind: 'cp'; cpIdx: number }).cpIdx}
+                          </text>
+                        </>);
                       })()}
-                      <text x={bx} y={baseY + topY + badgeR + 4}
-                        textAnchor="middle" fontSize={9} fill="#000" fontWeight="800"
-                        fontFamily="Arial,sans-serif">
-                        {(item as { kind: 'cp'; cpIdx: number }).cpIdx}
-                      </text>
-                      <text x={labelX} y={baseY + topY + 11} textAnchor={labelAnchor}
+                      <text x={labelX} y={baseY + topY + 5} textAnchor={labelAnchor}
                         fontSize={9} fill="var(--text-secondary)" fontFamily="Arial,sans-serif">
                         {(item.data.name ?? '').length > 12
                           ? item.data.name.slice(0, 11) + '…'
                           : item.data.name}
                       </text>
-                      <text x={labelX} y={baseY + topY + 26} textAnchor={labelAnchor}
+                      <text x={labelX} y={baseY + topY + 20} textAnchor={labelAnchor}
                         fontSize={13} fill="var(--text)" fontWeight="700"
                         fontFamily="Arial,sans-serif">
                         {formatTime(item.data.etaMs, timeFormat)}

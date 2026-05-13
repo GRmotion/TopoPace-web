@@ -3,7 +3,7 @@ import type { Checkpoint, RunPlan, PersonalProfile, CalibrationResult, Checkpoin
 import { DEFAULT_PROFILE, DEFAULT_ADVANCED, DEFAULT_UI_SETTINGS } from './models/types';
 import { computeGelZones } from './algorithm/GelAdvisor';
 import type { ParsedRoute } from './parsers/GpxParser';
-import { buildPlan, computeScheduleFull, elapsedMsAtDist } from './algorithm/PacePlanner';
+import { buildPlan, computeScheduleFull, elapsedMsAtDist, formatDist } from './algorithm/PacePlanner';
 import { parseRoute } from './parsers/GpxParser';
 import { parseTopoPace } from './utils/TopoPaceFile';
 import type { TopoPaceFileData } from './utils/TopoPaceFile';
@@ -367,14 +367,16 @@ export default function App() {
     localStorage.setItem(AUTOSAVE_ENABLED_KEY, v ? '1' : '0');
   }, []);
 
-  const getChartSvgHtml = useCallback((): string | null => {
+  const getChartSvgHtml = useCallback((): { html: string; width: number; height: number } | null => {
     const svgEl = chartWrapRef.current?.querySelector('svg');
     if (!svgEl) return null;
     const rect = svgEl.getBoundingClientRect();
+    const svgW = Math.round(rect.width);
+    const svgH = Math.round(rect.height);
     const clone = svgEl.cloneNode(true) as SVGSVGElement;
-    clone.setAttribute('viewBox', `0 0 ${Math.round(rect.width)} ${Math.round(rect.height)}`);
+    clone.setAttribute('viewBox', `0 0 ${svgW} ${svgH}`);
     clone.setAttribute('width', '100%');
-    clone.setAttribute('height', String(Math.round(rect.height)));
+    clone.setAttribute('height', String(svgH));
     clone.style.cursor = '';
     let svg = new XMLSerializer().serializeToString(clone);
     // Replace CSS variables with print-safe colours (light background)
@@ -391,15 +393,18 @@ export default function App() {
       .replace(/var\(--red\)/g, '#b71c1c');
     // Inject print style for profile notes and hide delete buttons
     const printStyle = `<style>
+text, tspan { font-family: Arial, sans-serif; }
 .pn-box { fill: rgba(0,0,0,0.08) !important; stroke: rgba(0,0,0,0.8) !important; }
 .pn-text { fill: rgba(0,0,0,1) !important; }
 .pn-arrow { stroke: rgba(0,0,0,0.75) !important; }
 .pn-anchor { fill: rgba(0,0,0,0.85) !important; }
 .pn-arrowhead { fill: rgba(0,0,0,0.75) !important; }
 .pn-delete { display: none !important; }
+.sun-line { stroke: rgba(0,0,0,0.35) !important; stroke-opacity: 1 !important; stroke-dasharray: 6,4 !important; }
+.sun-label { fill: rgba(0,0,0,0.5) !important; fill-opacity: 1 !important; }
 </style>`;
     svg = svg.replace('<defs>', `${printStyle}<defs>`);
-    return svg;
+    return { html: svg, width: svgW, height: svgH };
   }, []);
 
   return (
@@ -441,7 +446,7 @@ export default function App() {
                 >{raceName || route.name}</span>
               )}
               <span>·</span>
-              <span>{(route.totalDistM / 1000).toFixed(1)} km</span>
+              <span>{formatDist(route.totalDistM / 1000, uiSettings.distUnit)}</span>
               <span>·</span>
               <span>↑{Math.round(route.totalElevGainM)}m</span>
             </div>
@@ -593,7 +598,7 @@ export default function App() {
                     totalElevGainM={route.totalElevGainM}
                   />
                   <div data-tutorial="checkpoints">
-                    <CheckpointPanel checkpoints={checkpoints} totalDistM={route.totalDistM} onChange={setCheckpoints} />
+                    <CheckpointPanel checkpoints={checkpoints} totalDistM={route.totalDistM} onChange={setCheckpoints} distUnit={uiSettings.distUnit} />
                   </div>
                 </>
               ) : (
@@ -647,10 +652,10 @@ export default function App() {
                 planSegments={segments}
                 terrainSegments={route ? terrainSegs : []}
                 onClickDist={route ? (distM, type) => {
-                  const distKm = distM / 1000;
+                  const label = formatDist(distM / 1000, uiSettings.distUnit);
                   setCheckpoints(prev => [...prev, {
                     id: crypto.randomUUID(),
-                    name: type === 'aid' ? `Aid ${distKm.toFixed(1)}km` : `POI ${distKm.toFixed(1)}km`,
+                    name: type === 'aid' ? `Aid ${label}` : `POI ${label}`,
                     distM, type,
                     plannedStopMin: type === 'aid' ? 5 : 0,
                   }]);
@@ -851,10 +856,10 @@ export default function App() {
                       gelZones={gelZones}
                       onGelZonesChange={handleGelZonesChange}
                       onClickDistTyped={(distM, type) => {
-                        const distKm = distM / 1000;
+                        const label = formatDist(distM / 1000, uiSettings.distUnit);
                         setCheckpoints(prev => [...prev, {
                           id: crypto.randomUUID(),
-                          name: type === 'aid' ? `Aid ${distKm.toFixed(1)}km` : `POI ${distKm.toFixed(1)}km`,
+                          name: type === 'aid' ? `Aid ${label}` : `POI ${label}`,
                           distM, type,
                           plannedStopMin: type === 'aid' ? 5 : 0,
                         }]);

@@ -240,7 +240,7 @@ export default function TrailsModal({ onClose, onOpenTrail, onNewRoute, currentP
               position: 'fixed', top: menuPos.top, right: menuPos.right,
               background: 'var(--bg-card)', border: '1px solid var(--border)',
               borderRadius: 8, boxShadow: '0 4px 20px rgba(0,0,0,0.55)',
-              zIndex: 2101, width: 'max-content', overflow: 'hidden',
+              zIndex: 2101, overflow: 'hidden',
             }}>
               {(() => {
                 const trail = trails.find(t => t.trailId === menuId);
@@ -250,12 +250,14 @@ export default function TrailsModal({ onClose, onOpenTrail, onNewRoute, currentP
                   { label: 'Duplicate',    action: () => handleDuplicate(trail) },
                   { label: 'Export .tppa', action: () => handleExport(trail) },
                   { label: 'Remove',       action: () => handleRemove(trail), danger: true },
-                ].map(item => (
+                ].flatMap((item, i, arr) => [
                   <button key={item.label} className="ghost" style={{
-                    width: '100%', textAlign: 'left', borderRadius: 0,
+                    display: 'block', whiteSpace: 'nowrap', textAlign: 'left', borderRadius: 0,
                     padding: '9px 14px', fontSize: 12, color: item.danger ? 'var(--red)' : undefined,
-                  }} onClick={item.action}>{item.label}</button>
-                ));
+                    border: 'none',
+                  }} onClick={item.action}>{item.label}</button>,
+                  ...(i < arr.length - 1 ? [<div key={`sep-${i}`} style={{ height: 1, background: 'var(--border)', margin: '0 0' }} />] : []),
+                ]);
               })()}
             </div>
           </>

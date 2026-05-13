@@ -2,18 +2,27 @@ import { useState, useRef } from 'react';
 import type { Checkpoint, CheckpointType } from '../models/types';
 
 const AID_COLORS = ['#ffd54f', '#ff9800', '#ef5350', '#42a5f5', '#66bb6a', '#ab47bc'];
+const MI = 1609.344;
+
+function toDisplayDist(distM: number, unit: 'km' | 'mi'): number {
+  return unit === 'mi' ? distM / MI : distM / 1000;
+}
+function fromDisplayDist(val: number, unit: 'km' | 'mi'): number {
+  return unit === 'mi' ? val * MI : val * 1000;
+}
 
 interface Props {
   checkpoints: Checkpoint[];
   totalDistM: number;
   onChange: (cps: Checkpoint[]) => void;
+  distUnit?: 'km' | 'mi';
 }
 
 function newCp(distM: number, type: CheckpointType = 'aid'): Checkpoint {
   return { id: crypto.randomUUID(), name: '', distM, type, plannedStopMin: type === 'aid' ? 5 : 0 };
 }
 
-export default function CheckpointPanel({ checkpoints, totalDistM, onChange }: Props) {
+export default function CheckpointPanel({ checkpoints, totalDistM, onChange, distUnit = 'km' }: Props) {
   const [editing, setEditing] = useState<Checkpoint | null>(null);
   const [addingManual, setAddingManual] = useState(false);
   const [manualKm, setManualKm] = useState('');
@@ -29,7 +38,7 @@ export default function CheckpointPanel({ checkpoints, totalDistM, onChange }: P
   }
 
   function save(cp: Checkpoint) {
-    if (!cp.name.trim()) cp = { ...cp, name: `CP ${(cp.distM / 1000).toFixed(1)}km` };
+    if (!cp.name.trim()) cp = { ...cp, name: `CP ${toDisplayDist(cp.distM, distUnit).toFixed(1)}${distUnit}` };
     const exists = checkpoints.find(c => c.id === cp.id);
     onChange(exists ? checkpoints.map(c => c.id === cp.id ? cp : c) : [...checkpoints, cp]);
     setEditing(null);
@@ -41,9 +50,10 @@ export default function CheckpointPanel({ checkpoints, totalDistM, onChange }: P
   }
 
   function confirmManualAdd() {
-    const km = parseFloat(manualKm);
-    if (isNaN(km) || km < 0 || km * 1000 > totalDistM) return;
-    setEditing(newCp(km * 1000));
+    const val = parseFloat(manualKm);
+    const distM = fromDisplayDist(val, distUnit);
+    if (isNaN(val) || val < 0 || distM > totalDistM) return;
+    setEditing(newCp(distM));
     setAddingManual(false);
   }
 
@@ -60,7 +70,7 @@ export default function CheckpointPanel({ checkpoints, totalDistM, onChange }: P
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <input
             type="number"
-            placeholder={`km (0–${(totalDistM / 1000).toFixed(1)})`}
+            placeholder={`${distUnit} (0–${toDisplayDist(totalDistM, distUnit).toFixed(1)})`}
             value={manualKm}
             onChange={e => setManualKm(e.target.value)}
             style={{ flex: 1 }}
@@ -138,7 +148,7 @@ export default function CheckpointPanel({ checkpoints, totalDistM, onChange }: P
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cp.name || '—'}</div>
                 <div style={{ color: 'var(--text-secondary)', fontSize: 11 }}>
-                  {(cp.distM / 1000).toFixed(1)} km
+                  {toDisplayDist(cp.distM, distUnit).toFixed(1)} {distUnit}
                   {cp.type === 'aid' && cp.plannedStopMin > 0 && ` · ${cp.plannedStopMin}min`}
                   {cp.cutoffTime && ` · cutoff ${cp.cutoffTime}`}
                 </div>
@@ -148,7 +158,7 @@ export default function CheckpointPanel({ checkpoints, totalDistM, onChange }: P
             </div>
           </div>
           {editing?.id === cp.id && (
-            <CheckpointEditor cp={editing} totalDistM={totalDistM} onSave={save} onCancel={() => setEditing(null)} />
+            <CheckpointEditor cp={editing} totalDistM={totalDistM} onSave={save} onCancel={() => setEditing(null)} distUnit={distUnit} />
           )}
         </div>
       ))}
@@ -156,28 +166,28 @@ export default function CheckpointPanel({ checkpoints, totalDistM, onChange }: P
   );
 }
 
-interface EditorProps { cp: Checkpoint; totalDistM: number; onSave: (cp: Checkpoint) => void; onCancel: () => void; }
+interface EditorProps { cp: Checkpoint; totalDistM: number; onSave: (cp: Checkpoint) => void; onCancel: () => void; distUnit?: 'km' | 'mi'; }
 
-function CheckpointEditor({ cp: initial, totalDistM, onSave, onCancel }: EditorProps) {
+function CheckpointEditor({ cp: initial, totalDistM, onSave, onCancel, distUnit = 'km' }: EditorProps) {
   const [cp, setCp] = useState<Checkpoint>(initial);
-  const [distStr, setDistStr] = useState(() => (initial.distM / 1000).toFixed(2));
+  const [distStr, setDistStr] = useState(() => toDisplayDist(initial.distM, distUnit).toFixed(2));
   function set<K extends keyof Checkpoint>(key: K, value: Checkpoint[K]) { setCp(prev => ({ ...prev, [key]: value })); }
 
   function commitDist(str: string) {
     const v = parseFloat(str);
     if (!isNaN(v) && v >= 0) {
-      const clamped = Math.min(totalDistM, Math.max(0, v * 1000));
+      const clamped = Math.min(totalDistM, Math.max(0, fromDisplayDist(v, distUnit)));
       set('distM', clamped);
-      setDistStr((clamped / 1000).toFixed(2));
+      setDistStr(toDisplayDist(clamped, distUnit).toFixed(2));
     } else {
-      setDistStr((cp.distM / 1000).toFixed(2));
+      setDistStr(toDisplayDist(cp.distM, distUnit).toFixed(2));
     }
   }
 
   function handleSave() {
     const v = parseFloat(distStr);
     const finalDistM = !isNaN(v) && v >= 0
-      ? Math.min(totalDistM, Math.max(0, v * 1000))
+      ? Math.min(totalDistM, Math.max(0, fromDisplayDist(v, distUnit)))
       : cp.distM;
     onSave({ ...cp, distM: finalDistM });
   }
@@ -194,7 +204,7 @@ function CheckpointEditor({ cp: initial, totalDistM, onSave, onCancel }: EditorP
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <label>Distance (km)</label>
+        <label>Distance ({distUnit})</label>
         <input
           type="text"
           inputMode="decimal"

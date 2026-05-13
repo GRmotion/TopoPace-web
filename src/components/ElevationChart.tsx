@@ -1142,7 +1142,7 @@ export default function ElevationChart({
           background: 'var(--bg-card)', border: '1px solid var(--border)',
           borderRadius: 8, padding: '6px 10px', fontSize: 11, lineHeight: 1.7,
           pointerEvents: 'none', zIndex: 10, boxShadow: '0 2px 8px rgba(0,0,0,.4)',
-          opacity: hoveredNoteId ? 0 : 1,
+          opacity: hoveredNoteId || draggingEmojiId ? 0 : 1,
           transition: 'opacity 150ms ease',
         }}>
           <div style={{ color: 'var(--text-secondary)' }}>{formatDist(hover.km, distUnit)}</div>

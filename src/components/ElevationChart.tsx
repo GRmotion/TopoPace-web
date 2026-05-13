@@ -1225,10 +1225,9 @@ export default function ElevationChart({
           <button
             style={{
               background: addingNote !== 'idle' ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.55)',
-              color: '#fff',
-              border: '1px solid rgba(255,255,255,0.5)',
-              borderRadius: 4, fontSize: 39, padding: 0, cursor: 'pointer',
-              width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              border: '1.5px solid rgba(255,255,255,0.5)',
+              borderRadius: 4, padding: 0, cursor: 'pointer',
+              width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center',
               boxShadow: '0 1px 4px rgba(0,0,0,.35)', userSelect: 'none', flexShrink: 0,
             }}
             onMouseDown={e => e.stopPropagation()}
@@ -1238,7 +1237,13 @@ export default function ElevationChart({
               else setAddingNote('anchor');
             }}
             title={addingNote !== 'idle' ? 'Cancel note' : 'Add note'}
-          >✎</button>
+          >
+            <svg width="20" height="20" viewBox="0 0 16 16" fill="none"
+              stroke="rgba(255,255,255,0.9)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M11.5 2.5 L13.5 4.5 L4.5 13.5 L2 14 L2.5 11.5 Z" />
+              <line x1="9.5" y1="4.5" x2="11.5" y2="6.5" />
+            </svg>
+          </button>
         )}
         {zoomView && (
           <button

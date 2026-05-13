@@ -252,7 +252,7 @@ export default function ElevationChart({
       const boxFracY = Math.max(0, Math.min(1, (y - MT) / ph));
       onNotesChange?.(notesRef.current.map(n => n.id === id ? { ...n, boxKm, boxFracY } : n));
     }
-    function onUpNote(e: MouseEvent) {
+    function onUpNote(_e: MouseEvent) {
       if (!moved) {
         const note = notesRef.current.find(n => n.id === id);
         setEditingNoteId(id);
@@ -1169,7 +1169,6 @@ export default function ElevationChart({
         const gx = kmToX(badgeStartKm);
         const pct = draggingTerrain?.id === t.id ? draggingTerrain.currentPct : t.difficultyPercent;
         const col = terrainStroke(pct);
-        const isActive = activeTerrainId === t.id;
         return (
           <div key={t.id} style={{
             position: 'absolute',

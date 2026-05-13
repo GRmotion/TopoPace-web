@@ -340,21 +340,23 @@ export default function ElevationChart({
 
   const sunSamples = useMemo(() => {
     if (!sunDate || !segments?.length || !raceStartTime || data.length < 2) return null;
-    // raceStartTime is local time — subtract tzOffset to get UTC
+    // raceStartTime is local time at race location — convert to UTC using tzOffset
     const [hh, mm] = raceStartTime.split(':').map(Number);
     const localMs = (hh * 60 + mm) * 60_000;
     const tzOffsetMs = sunTzOffset * 3_600_000;
-    const [y, mo, d] = sunDate.split('-').map(Number);
-    const dateMs = Date.UTC(y, mo - 1, d);
-    const startUTC = new Date(dateMs + localMs - tzOffsetMs);
+    const [yr, mo, dy] = sunDate.split('-').map(Number);
+    const startUTC = new Date(Date.UTC(yr, mo - 1, dy) + localMs - tzOffsetMs);
 
-    const step = Math.max(1, Math.floor(data.length / 150));
+    // 300 uniformly-spaced km samples across the full route
+    const minKmS = data[0].km;
+    const maxKmS = data[data.length - 1].km;
+    const STEPS  = 300;
     const out: { km: number; el: number }[] = [];
-    for (let i = 0; i < data.length; i += step) {
-      const pt = data[i];
-      const elMs = elapsedMsAtDist(segments, checkpoints, raceStartTime, pt.km * 1000);
+    for (let i = 0; i <= STEPS; i++) {
+      const km  = minKmS + (i / STEPS) * (maxKmS - minKmS);
+      const elMs = elapsedMsAtDist(segments, checkpoints, raceStartTime, km * 1000);
       if (elMs == null) continue;
-      out.push({ km: pt.km, el: solarElevationDeg(new Date(startUTC.getTime() + elMs), avgLat, avgLon) });
+      out.push({ km, el: solarElevationDeg(new Date(startUTC.getTime() + elMs), avgLat, avgLon) });
     }
     return out.length >= 2 ? out : null;
   }, [sunDate, sunTzOffset, segments, checkpoints, raceStartTime, data, avgLat, avgLon]);
@@ -426,13 +428,28 @@ export default function ElevationChart({
   const linePath = pts ? `M ${pts}` : '';
   const areaPath = pts ? `M ${pts} L ${kmToX(maxKm).toFixed(1)},${(MT + plotH).toFixed(1)} L ${kmToX(minKm).toFixed(1)},${(MT + plotH).toFixed(1)} Z` : '';
 
-  // Sun elevation polyline: -18° → bottom, +90° → top of plot
-  const sunLinePath = (sunSamples && w > 0)
-    ? `M ${sunSamples.map(s => {
-        const fracY = 1 - (s.el + 18) / 108; // clamped by clipPath
-        return `${kmToX(s.km).toFixed(1)},${(MT + fracY * plotH).toFixed(1)}`;
-      }).join(' L ')}`
-    : null;
+  // Sun elevation — Catmull-Rom smooth path: -18° → bottom, +90° → top of plot
+  const sunLinePath = (() => {
+    if (!sunSamples || w === 0) return null;
+    const px = sunSamples.map(s => ({
+      x: kmToX(s.km),
+      y: MT + (1 - (s.el + 18) / 108) * plotH,
+    }));
+    if (px.length < 2) return null;
+    let d = `M ${px[0].x.toFixed(1)},${px[0].y.toFixed(1)}`;
+    for (let i = 0; i < px.length - 1; i++) {
+      const p0 = px[Math.max(0, i - 1)];
+      const p1 = px[i];
+      const p2 = px[i + 1];
+      const p3 = px[Math.min(px.length - 1, i + 2)];
+      const cx1 = p1.x + (p2.x - p0.x) / 6;
+      const cy1 = p1.y + (p2.y - p0.y) / 6;
+      const cx2 = p2.x - (p3.x - p1.x) / 6;
+      const cy2 = p2.y - (p3.y - p1.y) / 6;
+      d += ` C ${cx1.toFixed(1)},${cy1.toFixed(1)} ${cx2.toFixed(1)},${cy2.toFixed(1)} ${p2.x.toFixed(1)},${p2.y.toFixed(1)}`;
+    }
+    return d;
+  })();
 
   // Axes
   const yStep = [5, 10, 25, 50, 100, 250, 500].find(v => eleRange / v <= 8) ?? 500;

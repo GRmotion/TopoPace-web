@@ -1006,9 +1006,9 @@ export default function ElevationChart({
               style={{ cursor: 'default' }}
             >
               <text x={ex} y={ey} textAnchor="middle" dominantBaseline="central"
-                fontSize={20} clipPath="url(#pc)" style={{ userSelect: 'none', pointerEvents: 'none' }}>{em.emoji}</text>
+                fontSize={25} clipPath="url(#pc)" style={{ userSelect: 'none', pointerEvents: 'none' }}>{em.emoji}</text>
               {/* invisible hit area so hover works in all browsers */}
-              <rect x={ex - 12} y={ey - 12} width={24} height={24} fill="transparent" clipPath="url(#pc)" />
+              <rect x={ex - 14} y={ey - 14} width={28} height={28} fill="transparent" clipPath="url(#pc)" />
               {isHov && (
                 <g style={{ cursor: 'pointer' }}
                   onClick={e => { e.stopPropagation(); onEmojisChange?.(emojisRef.current.filter(e2 => e2.id !== em.id)); }}>
@@ -1024,7 +1024,7 @@ export default function ElevationChart({
         {/* Floating emoji following cursor */}
         {floatingEmoji && cursorPos && w > 0 && (
           <text x={cursorPos.x} y={cursorPos.y} textAnchor="middle" dominantBaseline="central"
-            fontSize={22} style={{ pointerEvents: 'none', userSelect: 'none' }}>{floatingEmoji}</text>
+            fontSize={25} style={{ pointerEvents: 'none', userSelect: 'none' }}>{floatingEmoji}</text>
         )}
 
         {/* Note placement preview: anchor dot + box following cursor */}
@@ -1330,31 +1330,31 @@ export default function ElevationChart({
             onMouseLeave={() => setEmojiTrayOpen(false)}
           >
             {emojiTrayOpen && (
-              <div style={{
+              <div className="emoji-tray" style={{
                 position: 'absolute', right: '100%', top: 0,
                 display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 0,
                 height: 34,
-                background: 'rgba(0,0,0,0.55)',
-                border: '1.5px solid rgba(255,255,255,0.5)',
-                borderRadius: 4, padding: '0 4px',
-                boxShadow: '0 1px 4px rgba(0,0,0,.35)',
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border)',
+                borderRadius: 8, padding: '0 4px',
+                boxShadow: '0 2px 8px rgba(0,0,0,.45)',
                 whiteSpace: 'nowrap',
               }}>
                 {(['☀️', '💩', '💧', '🔥', '🧊'] as const).map(em => (
                   <button key={em}
                     onMouseDown={e => e.stopPropagation()}
                     onClick={e => { e.stopPropagation(); setFloatingEmoji(em); setEmojiTrayOpen(false); }}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, padding: '0 3px', lineHeight: 1 }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, padding: '0 3px', lineHeight: 1, borderRadius: 4 }}
                   >{em}</button>
                 ))}
                 <button
                   onMouseDown={e => e.stopPropagation()}
                   onClick={e => { e.stopPropagation(); emojiInputRef.current?.focus(); }}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 3px', lineHeight: 1, display: 'flex', alignItems: 'center' }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 3px', lineHeight: 1, display: 'flex', alignItems: 'center', borderRadius: 4 }}
                   title="System emoji picker"
                 >
                   <svg width="18" height="18" viewBox="0 0 20 20" fill="none"
-                    stroke="rgba(255,255,255,0.75)" strokeWidth="1.7" strokeLinecap="round">
+                    stroke="var(--text-secondary)" strokeWidth="1.7" strokeLinecap="round">
                     <circle cx="10" cy="10" r="8" />
                     <line x1="10" y1="6" x2="10" y2="14" />
                     <line x1="6" y1="10" x2="14" y2="10" />
@@ -1364,9 +1364,9 @@ export default function ElevationChart({
             )}
             <button
               style={{
-                background: floatingEmoji ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.55)',
-                border: '1.5px solid rgba(255,255,255,0.5)',
-                borderRadius: 4, padding: 0, cursor: 'pointer',
+                background: floatingEmoji ? 'var(--bg-elevated)' : 'var(--bg-card)',
+                border: floatingEmoji ? '1px solid var(--green)' : '1px solid var(--border)',
+                borderRadius: 8, padding: 0, cursor: 'pointer',
                 width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center',
                 boxShadow: '0 1px 4px rgba(0,0,0,.35)', userSelect: 'none', flexShrink: 0,
               }}
@@ -1375,10 +1375,10 @@ export default function ElevationChart({
               title={floatingEmoji ? 'Cancel emoji' : 'Add emoji'}
             >
               <svg width="20" height="20" viewBox="0 0 20 20" fill="none"
-                stroke="rgba(255,255,255,0.9)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                stroke={floatingEmoji ? 'var(--green)' : 'var(--text-secondary)'} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="10" cy="10" r="8" />
-                <circle cx="7.5" cy="8.5" r="0.75" fill="rgba(255,255,255,0.9)" stroke="none" />
-                <circle cx="12.5" cy="8.5" r="0.75" fill="rgba(255,255,255,0.9)" stroke="none" />
+                <circle cx="7.5" cy="8.5" r="0.75" fill={floatingEmoji ? 'var(--green)' : 'var(--text-secondary)'} stroke="none" />
+                <circle cx="12.5" cy="8.5" r="0.75" fill={floatingEmoji ? 'var(--green)' : 'var(--text-secondary)'} stroke="none" />
                 <path d="M7 12 Q10 14.5 13 12" />
               </svg>
             </button>
@@ -1387,9 +1387,9 @@ export default function ElevationChart({
         {onNotesChange && (
           <button
             style={{
-              background: addingNote !== 'idle' ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.55)',
-              border: '1.5px solid rgba(255,255,255,0.5)',
-              borderRadius: 4, padding: 0, cursor: 'pointer',
+              background: addingNote !== 'idle' ? 'var(--bg-elevated)' : 'var(--bg-card)',
+              border: addingNote !== 'idle' ? '1px solid var(--green)' : '1px solid var(--border)',
+              borderRadius: 8, padding: 0, cursor: 'pointer',
               width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center',
               boxShadow: '0 1px 4px rgba(0,0,0,.35)', userSelect: 'none', flexShrink: 0,
             }}
@@ -1402,7 +1402,7 @@ export default function ElevationChart({
             title={addingNote !== 'idle' ? 'Cancel note' : 'Add note'}
           >
             <svg width="20" height="20" viewBox="0 0 16 16" fill="none"
-              stroke="rgba(255,255,255,0.9)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+              stroke={addingNote !== 'idle' ? 'var(--green)' : 'var(--text-secondary)'} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
               <path d="M11.5 2.5 L13.5 4.5 L4.5 13.5 L2 14 L2.5 11.5 Z" />
               <line x1="9.5" y1="4.5" x2="11.5" y2="6.5" />
             </svg>

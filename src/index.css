@@ -110,6 +110,14 @@ input[type=number].no-spinners { -moz-appearance: textfield; }
   transform-origin: left center;
 }
 
+@keyframes emojiTraySlide {
+  from { transform: translateX(10px); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+.emoji-tray {
+  animation: emojiTraySlide 280ms cubic-bezier(0, 0, 0, 1) both;
+}
+
 @keyframes terrainFlash {
   0%, 100% { opacity: 0; }
   50%      { opacity: 0.75; }

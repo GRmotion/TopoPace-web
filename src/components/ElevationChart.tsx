@@ -1136,7 +1136,7 @@ export default function ElevationChart({
       {selection && onMarkSelection && w > 0 && (
         <div style={{
           position: 'absolute',
-          left: Math.max(ML + 4, Math.min(ML + plotW - 30, kmToX(selection.startKm))),
+          left: Math.max(ML, Math.min(ML + plotW - 70, kmToX(selection.startKm))) + 4,
           top: MT + 4,
           zIndex: 22, pointerEvents: 'auto',
         }}>

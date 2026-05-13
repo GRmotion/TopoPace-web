@@ -124,6 +124,7 @@ export default function ElevationChart({
   const editingTextRef = useRef('');
   const [draggingNote, setDraggingNote] = useState<{ id: string; startClientX: number; startClientY: number } | null>(null);
   const [cursorPos, setCursorPos] = useState<{ x: number; y: number } | null>(null);
+  const [hoveredNoteId, setHoveredNoteId] = useState<string | null>(null);
 
   useLayoutEffect(() => {
     if (containerRef.current) setW(containerRef.current.clientWidth);
@@ -220,7 +221,7 @@ export default function ElevationChart({
       const x = e.clientX - svgRect.left;
       const y = e.clientY - svgRect.top;
       const { viewStart: vs, viewSpan: vsp, plotW: pw, plotH: ph } = chartStateRef.current;
-      const boxKm = vs + ((x - ML) / pw) * vsp;
+      const boxKm = Math.max(vs, Math.min(vs + vsp, vs + ((x - ML) / pw) * vsp));
       const boxFracY = Math.max(0, Math.min(1, (y - MT) / ph));
       onNotesChange?.(notesRef.current.map(n => n.id === id ? { ...n, boxKm, boxFracY } : n));
     }
@@ -860,14 +861,16 @@ export default function ElevationChart({
           const gap = 3.5 + 20;
           const arrowEndX = len > gap ? ax - (dx / len) * gap : ax;
           const arrowEndY = len > gap ? ay - (dy / len) * gap : ay;
+          const isHovered = hoveredNoteId === note.id;
           return (
-            <g key={note.id}>
-              {!isEditing && (
-                <line x1={asx} y1={asy} x2={arrowEndX} y2={arrowEndY}
-                  className="pn-arrow" stroke="rgba(255,255,255,0.75)" strokeWidth={1.5}
-                  markerEnd="url(#note-arrowhead)" clipPath="url(#pc)"
-                  style={{ pointerEvents: 'none' }} />
-              )}
+            <g key={note.id}
+              onMouseEnter={() => setHoveredNoteId(note.id)}
+              onMouseLeave={() => setHoveredNoteId(null)}
+            >
+              <line x1={asx} y1={asy} x2={arrowEndX} y2={arrowEndY}
+                className="pn-arrow" stroke="rgba(255,255,255,0.75)" strokeWidth={1.5}
+                markerEnd="url(#note-arrowhead)" clipPath="url(#pc)"
+                style={{ pointerEvents: 'none' }} />
               <circle cx={ax} cy={ay} r={3.5}
                 className="pn-anchor" fill="rgba(255,255,255,0.85)" clipPath="url(#pc)"
                 style={{ pointerEvents: 'none' }} />
@@ -889,11 +892,11 @@ export default function ElevationChart({
                   ))}
                 </text>
               )}
-              {!isEditing && (
+              {!isEditing && isHovered && (
                 <g className="pn-delete" style={{ cursor: 'pointer' }}
                   onClick={e => { e.stopPropagation(); onNotesChange?.(notesRef.current.filter(n => n.id !== note.id)); }}>
-                  <circle cx={bx + hw - 7} cy={by - hh + 7} r={7} fill="rgba(0,0,0,0.5)" />
-                  <text x={bx + hw - 7} y={by - hh + 11} textAnchor="middle"
+                  <circle cx={bx + hw - 11} cy={by - hh + 11} r={7} fill="rgba(0,0,0,0.5)" />
+                  <text x={bx + hw - 11} y={by - hh + 15} textAnchor="middle"
                     fill="#fff" fontSize={9} fontFamily="Arial,sans-serif"
                     style={{ pointerEvents: 'none' }}>✕</text>
                 </g>

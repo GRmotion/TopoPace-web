@@ -91,7 +91,7 @@ function generateTableHtml(plan: RunPlan, results: CheckpointResult[], gelResult
     </thead>
     <tbody>${rows}</tbody>
   </table>
-  <footer>TopoPace race planner · topopace.app</footer>
+  <footer>TopoPace race planner · topopace.run</footer>
 </body>
 </html>`;
 }
@@ -127,7 +127,7 @@ function generateProfileHtml(plan: RunPlan, svgHtml: string): string {
   <h1>TopoPace — ${plan.name}</h1>
   <div class="meta">Start: ${plan.raceStartTime} &nbsp;·&nbsp; Goal: ${goalH}h ${goalMin}min &nbsp;·&nbsp; Generated: ${date}</div>
   <div class="chart-wrap">${svgHtml}</div>
-  <footer>TopoPace race planner · topopace.app</footer>
+  <footer>TopoPace race planner · topopace.run</footer>
 </body>
 </html>`;
 }

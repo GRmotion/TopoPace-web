@@ -79,79 +79,79 @@ export default function CheckpointPanel({ checkpoints, totalDistM, onChange }: P
       )}
 
       {sorted.map(cp => (
-        <div
-          key={cp.id}
-          style={{ background: 'var(--bg-elevated)', borderRadius: 8, overflow: 'visible' }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', position: 'relative' }}>
-            {/* Color icon — circle for Aid, rounded triangle for POI — hover shows swatch */}
-            <div
-              style={{ position: 'relative', flexShrink: 0, width: 16, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-              onMouseEnter={() => showColor(cp.id)}
-              onMouseLeave={hideColor}
-            >
-              {cp.type === 'aid' ? (
-                <span style={{
-                  display: 'inline-block', width: 12, height: 12, borderRadius: '50%',
-                  background: cp.color || '#ffd54f',
-                  boxShadow: '0 0 0 1.5px rgba(0,0,0,0.3)',
-                  cursor: 'pointer',
-                }} />
-              ) : (
-                <svg width="16" height="16" viewBox="0 0 14 14" style={{ display: 'block', cursor: 'pointer' }}
-                  fill={cp.color || '#8b8fa8'}>
-                  <path d="M5.4 5.1 Q7 2.5 8.6 5.1 L10.9 9 Q12.5 11.5 9.5 11.5 L4.5 11.5 Q1.5 11.5 3.1 9 Z" />
-                </svg>
-              )}
-              {colorHoverId === cp.id && (
-                <div
-                  className="anim-pop"
-                  onMouseEnter={() => showColor(cp.id)}
-                  onMouseLeave={hideColor}
-                  style={{
-                    position: 'absolute',
-                    top: '50%', left: 18,
-                    transform: 'translateY(-50%)',
-                    transformOrigin: 'left center',
-                    display: 'flex', gap: 5, alignItems: 'center',
-                    background: 'var(--bg-card)',
-                    border: '1px solid var(--border)',
-                    borderRadius: 8, padding: '5px 8px',
-                    zIndex: 50,
-                    boxShadow: '0 3px 12px rgba(0,0,0,0.45)',
-                    whiteSpace: 'nowrap',
-                  }}>
-                  {AID_COLORS.map(color => (
-                    <button
-                      key={color}
-                      onClick={() => { onChange(checkpoints.map(c => c.id === cp.id ? { ...c, color } : c)); setColorHoverId(null); }}
-                      style={{
-                        width: 16, height: 16, borderRadius: '50%', background: color, border: 'none',
-                        cursor: 'pointer', padding: 0, flexShrink: 0,
-                        outline: (cp.color || (cp.type === 'aid' ? '#ffd54f' : '#8b8fa8')) === color ? '2.5px solid #fff' : 'none',
-                        outlineOffset: 1,
-                        boxShadow: '0 0 0 1px rgba(0,0,0,0.35)',
-                      }}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cp.name || '—'}</div>
-              <div style={{ color: 'var(--text-secondary)', fontSize: 11 }}>
-                {(cp.distM / 1000).toFixed(1)} km
-                {cp.type === 'aid' && cp.plannedStopMin > 0 && ` · ${cp.plannedStopMin}min`}
-                {cp.cutoffTime && ` · cutoff ${cp.cutoffTime}`}
+        <div key={cp.id}>
+          <div style={{ background: 'var(--bg-elevated)', borderRadius: 8, overflow: 'visible' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', position: 'relative' }}>
+              {/* Color icon — circle for Aid, rounded triangle for POI — hover shows swatch */}
+              <div
+                style={{ position: 'relative', flexShrink: 0, width: 16, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                onMouseEnter={() => showColor(cp.id)}
+                onMouseLeave={hideColor}
+              >
+                {cp.type === 'aid' ? (
+                  <span style={{
+                    display: 'inline-block', width: 12, height: 12, borderRadius: '50%',
+                    background: cp.color || '#ffd54f',
+                    boxShadow: '0 0 0 1.5px rgba(0,0,0,0.3)',
+                    cursor: 'pointer',
+                  }} />
+                ) : (
+                  <svg width="16" height="16" viewBox="0 0 14 14" style={{ display: 'block', cursor: 'pointer' }}
+                    fill={cp.color || '#8b8fa8'}>
+                    <path d="M5.4 5.1 Q7 2.5 8.6 5.1 L10.9 9 Q12.5 11.5 9.5 11.5 L4.5 11.5 Q1.5 11.5 3.1 9 Z" />
+                  </svg>
+                )}
+                {colorHoverId === cp.id && (
+                  <div
+                    className="anim-pop"
+                    onMouseEnter={() => showColor(cp.id)}
+                    onMouseLeave={hideColor}
+                    style={{
+                      position: 'absolute',
+                      top: '50%', left: 18,
+                      transform: 'translateY(-50%)',
+                      transformOrigin: 'left center',
+                      display: 'flex', gap: 5, alignItems: 'center',
+                      background: 'var(--bg-card)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 8, padding: '5px 8px',
+                      zIndex: 50,
+                      boxShadow: '0 3px 12px rgba(0,0,0,0.45)',
+                      whiteSpace: 'nowrap',
+                    }}>
+                    {AID_COLORS.map(color => (
+                      <button
+                        key={color}
+                        onClick={() => { onChange(checkpoints.map(c => c.id === cp.id ? { ...c, color } : c)); setColorHoverId(null); }}
+                        style={{
+                          width: 16, height: 16, borderRadius: '50%', background: color, border: 'none',
+                          cursor: 'pointer', padding: 0, flexShrink: 0,
+                          outline: (cp.color || (cp.type === 'aid' ? '#ffd54f' : '#8b8fa8')) === color ? '2.5px solid #fff' : 'none',
+                          outlineOffset: 1,
+                          boxShadow: '0 0 0 1px rgba(0,0,0,0.35)',
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cp.name || '—'}</div>
+                <div style={{ color: 'var(--text-secondary)', fontSize: 11 }}>
+                  {(cp.distM / 1000).toFixed(1)} km
+                  {cp.type === 'aid' && cp.plannedStopMin > 0 && ` · ${cp.plannedStopMin}min`}
+                  {cp.cutoffTime && ` · cutoff ${cp.cutoffTime}`}
+                </div>
+              </div>
+              <button className="ghost" style={{ fontSize: 11, padding: '2px 8px' }} onClick={() => setEditing({ ...cp })}>Edit</button>
+              <button className="ghost" style={{ fontSize: 11, padding: '2px 6px', color: 'var(--red)', borderColor: 'var(--red)' }} onClick={() => remove(cp.id)}>✕</button>
             </div>
-            <button className="ghost" style={{ fontSize: 11, padding: '2px 8px' }} onClick={() => setEditing({ ...cp })}>Edit</button>
-            <button className="ghost" style={{ fontSize: 11, padding: '2px 6px', color: 'var(--red)', borderColor: 'var(--red)' }} onClick={() => remove(cp.id)}>✕</button>
           </div>
+          {editing?.id === cp.id && (
+            <CheckpointEditor cp={editing} totalDistM={totalDistM} onSave={save} onCancel={() => setEditing(null)} />
+          )}
         </div>
       ))}
-
-      {editing && <CheckpointEditor cp={editing} totalDistM={totalDistM} onSave={save} onCancel={() => setEditing(null)} />}
     </div>
   );
 }
@@ -160,7 +160,7 @@ interface EditorProps { cp: Checkpoint; totalDistM: number; onSave: (cp: Checkpo
 
 function CheckpointEditor({ cp: initial, totalDistM, onSave, onCancel }: EditorProps) {
   const [cp, setCp] = useState<Checkpoint>(initial);
-  const [distStr, setDistStr] = useState(() => String(initial.distM / 1000));
+  const [distStr, setDistStr] = useState(() => (initial.distM / 1000).toFixed(2));
   function set<K extends keyof Checkpoint>(key: K, value: Checkpoint[K]) { setCp(prev => ({ ...prev, [key]: value })); }
 
   function commitDist(str: string) {
@@ -168,9 +168,9 @@ function CheckpointEditor({ cp: initial, totalDistM, onSave, onCancel }: EditorP
     if (!isNaN(v) && v >= 0) {
       const clamped = Math.min(totalDistM, Math.max(0, v * 1000));
       set('distM', clamped);
-      setDistStr(String(clamped / 1000));
+      setDistStr((clamped / 1000).toFixed(2));
     } else {
-      setDistStr(String(cp.distM / 1000));
+      setDistStr((cp.distM / 1000).toFixed(2));
     }
   }
 
@@ -217,11 +217,21 @@ function CheckpointEditor({ cp: initial, totalDistM, onSave, onCancel }: EditorP
         <div style={{ display: 'flex', gap: 12 }}>
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
             <label>Planned stop</label>
-            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-              <input type="number" min={0} max={120} value={cp.plannedStopMin}
-                onChange={e => set('plannedStopMin', parseInt(e.target.value) || 0)}
-                style={{ paddingRight: 38, width: '100%' }} />
-              <span style={{ position: 'absolute', right: 10, color: 'var(--text-hint)', fontSize: 11, pointerEvents: 'none' }}>MIN</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ position: 'relative', flex: 1 }}>
+                <input className="no-spinners" type="number" min={0} max={120} value={cp.plannedStopMin}
+                  onChange={e => set('plannedStopMin', parseInt(e.target.value) || 0)}
+                  style={{ paddingRight: 38, width: '100%' }} />
+                <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-hint)', fontSize: 11, pointerEvents: 'none' }}>MIN</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                <button onMouseDown={e => e.preventDefault()}
+                  onClick={() => set('plannedStopMin', Math.min(120, cp.plannedStopMin + 1))}
+                  style={{ background: 'none', border: 'none', padding: '1px 4px', color: 'var(--green)', fontSize: 9, lineHeight: 1, cursor: 'pointer', borderRadius: 3 }}>▲</button>
+                <button onMouseDown={e => e.preventDefault()}
+                  onClick={() => set('plannedStopMin', Math.max(0, cp.plannedStopMin - 1))}
+                  style={{ background: 'none', border: 'none', padding: '1px 4px', color: 'var(--green)', fontSize: 9, lineHeight: 1, cursor: 'pointer', borderRadius: 3 }}>▼</button>
+              </div>
             </div>
           </div>
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>

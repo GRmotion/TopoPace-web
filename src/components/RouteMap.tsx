@@ -40,6 +40,13 @@ function lerpColor(a: string, b: string, t: number): string {
   return `rgb(${r},${g},${bl})`;
 }
 
+function terrainSegmentColor(pct: number): string {
+  if (pct <= 0) return '#66bb6a';
+  if (pct <= 15) return '#ffd54f';
+  if (pct <= 40) return '#ff9800';
+  return '#f44336';
+}
+
 function elevationColor(t: number): string {
   const c = Math.max(0, Math.min(1, t));
   if (c < 0.25) return lerpColor('#2196f3', '#00bcd4', c * 4);
@@ -89,11 +96,7 @@ function buildColoredSegments(
     if (mode === 'terrain') {
       const km = p.distFromStart / 1000;
       const ts = terrainSegs.find(t => km >= t.startKm && km < t.endKm);
-      if (ts) {
-        if (ts.difficultyPercent > 0) return lerpColor('#ffd54f', '#f44336', Math.min(ts.difficultyPercent / 5, 1));
-        if (ts.difficultyPercent < 0) return lerpColor('#ffd54f', '#2196f3', Math.min(-ts.difficultyPercent / 5, 1));
-        return '#8b8fa8';
-      }
+      if (ts) return terrainSegmentColor(ts.difficultyPercent);
     }
     return solidColor;
   };
@@ -217,12 +220,7 @@ export default function RouteMap({
         return km >= seg.startKm && km <= seg.endKm;
       });
       if (segPts.length < 2) return;
-      const pct = seg.difficultyPercent;
-      const color = pct > 0
-        ? lerpColor('#ffd54f', '#f44336', Math.min(pct / 5, 1))
-        : pct < 0
-          ? lerpColor('#ffd54f', '#2196f3', Math.min(-pct / 5, 1))
-          : '#8b8fa8';
+      const color = terrainSegmentColor(seg.difficultyPercent);
       terrainOverlayLayersRef.current.push(
         L.polyline(segPts.map(p => [p.lat, p.lon] as L.LatLngTuple), {
           color, weight: 5, dashArray: '8 6', opacity: 0.85,

@@ -49,18 +49,20 @@ export default function GelAdvisorPanel({ settings, onChange, gelCount }: Props)
         <>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <label style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Interval</label>
-            <input
-              className="no-spinners"
-              type="number"
-              min={10}
-              max={500}
-              value={intervalInput}
-              onChange={e => setIntervalInput(e.target.value)}
-              onBlur={() => commitInterval(intervalInput)}
-              onKeyDown={e => { if (e.key === 'Enter') commitInterval(intervalInput); }}
-              style={{ width: 64, textAlign: 'center' }}
-            />
-            <span style={{ fontSize: 12, color: 'var(--text-hint)' }}>min</span>
+            <div style={{ position: 'relative' }}>
+              <input
+                className="no-spinners"
+                type="number"
+                min={10}
+                max={500}
+                value={intervalInput}
+                onChange={e => setIntervalInput(e.target.value)}
+                onBlur={() => commitInterval(intervalInput)}
+                onKeyDown={e => { if (e.key === 'Enter') commitInterval(intervalInput); }}
+                style={{ width: 72, textAlign: 'center', paddingRight: 30 }}
+              />
+              <span style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', fontSize: 11, color: 'var(--text-hint)', pointerEvents: 'none' }}>MIN</span>
+            </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
               <button
                 onMouseDown={e => e.preventDefault()}

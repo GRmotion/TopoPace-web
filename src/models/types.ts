@@ -1,3 +1,12 @@
+export interface ProfileNote {
+  id: string;
+  anchorKm: number;
+  anchorEle: number;
+  boxKm: number;
+  boxFracY: number;
+  text: string;
+}
+
 export interface TrackPoint {
   distFromStart: number; // metres
   ele: number;           // metres

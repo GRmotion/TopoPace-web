@@ -121,6 +121,7 @@ export default function ElevationChart({
   const [pendingAnchor, setPendingAnchor] = useState<{ km: number; ele: number } | null>(null);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState('');
+  const editingTextRef = useRef('');
   const [draggingNote, setDraggingNote] = useState<{ id: string; startClientX: number; startClientY: number } | null>(null);
   const [cursorPos, setCursorPos] = useState<{ x: number; y: number } | null>(null);
 
@@ -205,6 +206,7 @@ export default function ElevationChart({
   }, []);
 
   notesRef.current = notes ?? [];
+  editingTextRef.current = editingText;
 
   useEffect(() => {
     if (!draggingNote) return;
@@ -241,6 +243,17 @@ export default function ElevationChart({
     el.style.height = 'auto';
     el.style.height = el.scrollHeight + 'px';
   }, [editingText, editingNoteId]);
+
+  useEffect(() => {
+    if (!editingNoteId) return;
+    function onDocDown(e: MouseEvent) {
+      if (editingTextareaRef.current?.contains(e.target as Node)) return;
+      onNotesChange?.(notesRef.current.map(n => n.id === editingNoteId ? { ...n, text: editingTextRef.current } : n));
+      setEditingNoteId(null);
+    }
+    document.addEventListener('mousedown', onDocDown, true);
+    return () => document.removeEventListener('mousedown', onDocDown, true);
+  }, [editingNoteId, onNotesChange]);
 
   const data = useMemo<DPt[]>(() =>
     points
@@ -680,90 +693,6 @@ export default function ElevationChart({
         {linePath && <path d={areaPath} fill="url(#eg)" clipPath="url(#pc)" />}
         {linePath && <path d={linePath} fill="none" stroke="#4caf50" strokeWidth={1.5} clipPath="url(#pc)" />}
 
-        {/* Profile notes */}
-        {w > 0 && notes?.map(note => {
-          const isEditing = editingNoteId === note.id;
-          const textForSize = isEditing ? editingText : note.text;
-          const { lines, boxW, boxH } = noteSize(textForSize);
-          const bx = kmToX(note.boxKm);
-          const by = MT + note.boxFracY * plotH;
-          const ax = kmToX(note.anchorKm);
-          const ay = eleToY(note.anchorEle);
-          const dx = ax - bx, dy = ay - by;
-          const hw = boxW / 2, hh = boxH / 2;
-          const tMin = Math.min(Math.abs(dx) > 0.01 ? hw / Math.abs(dx) : Infinity, Math.abs(dy) > 0.01 ? hh / Math.abs(dy) : Infinity);
-          const asx = bx + tMin * dx, asy = by + tMin * dy;
-          const firstLineY = by - hh + NOTE_PAD + NOTE_FONT;
-          const len = Math.sqrt(dx * dx + dy * dy);
-          const gap = 3.5 + 20;
-          const arrowEndX = len > gap ? ax - (dx / len) * gap : ax;
-          const arrowEndY = len > gap ? ay - (dy / len) * gap : ay;
-          return (
-            <g key={note.id}>
-              <line x1={asx} y1={asy} x2={arrowEndX} y2={arrowEndY}
-                className="pn-arrow" stroke="rgba(255,255,255,0.75)" strokeWidth={1.5}
-                markerEnd="url(#note-arrowhead)" clipPath="url(#pc)"
-                style={{ pointerEvents: 'none' }} />
-              <circle cx={ax} cy={ay} r={3.5}
-                className="pn-anchor" fill="rgba(255,255,255,0.85)" clipPath="url(#pc)"
-                style={{ pointerEvents: 'none' }} />
-              <rect x={bx - hw} y={by - hh} width={boxW} height={boxH}
-                rx={10} ry={10}
-                className="pn-box" fill="rgba(255,255,255,0.4)" stroke="rgba(255,255,255,0.8)" strokeWidth={1.5}
-                clipPath="url(#pc)"
-                style={{ cursor: 'move' }}
-                onMouseDown={e => { e.stopPropagation(); setDraggingNote({ id: note.id, startClientX: e.clientX, startClientY: e.clientY }); }}
-              />
-              {!isEditing && (
-                <text textAnchor="middle" className="pn-text" fill="rgba(255,255,255,1)"
-                  fontSize={NOTE_FONT} fontFamily="system-ui,Arial,sans-serif"
-                  clipPath="url(#pc)" style={{ pointerEvents: 'none' }}>
-                  {lines.map((line, i) => (
-                    <tspan key={i} x={bx} y={firstLineY + i * NOTE_LINE_H}>{line || ' '}</tspan>
-                  ))}
-                </text>
-              )}
-              {!isEditing && (
-                <g className="pn-delete" style={{ cursor: 'pointer' }}
-                  onClick={e => { e.stopPropagation(); onNotesChange?.(notesRef.current.filter(n => n.id !== note.id)); }}>
-                  <circle cx={bx + hw - 7} cy={by - hh + 7} r={7} fill="rgba(0,0,0,0.5)" />
-                  <text x={bx + hw - 7} y={by - hh + 11} textAnchor="middle"
-                    fill="#fff" fontSize={9} fontFamily="Arial,sans-serif"
-                    style={{ pointerEvents: 'none' }}>✕</text>
-                </g>
-              )}
-            </g>
-          );
-        })}
-
-        {/* Note placement preview: anchor dot + box following cursor */}
-        {w > 0 && addingNote === 'box' && pendingAnchor && cursorPos && (() => {
-          const { boxW, boxH } = noteSize('');
-          const bx = cursorPos.x, by = cursorPos.y;
-          const ax = kmToX(pendingAnchor.km), ay = eleToY(pendingAnchor.ele);
-          const dx = ax - bx, dy = ay - by;
-          const hw = boxW / 2, hh = boxH / 2;
-          const tMin = Math.min(Math.abs(dx) > 0.01 ? hw / Math.abs(dx) : Infinity, Math.abs(dy) > 0.01 ? hh / Math.abs(dy) : Infinity);
-          const asx = bx + tMin * dx, asy = by + tMin * dy;
-          const len = Math.sqrt(dx * dx + dy * dy);
-          const gap = 3.5 + 20;
-          const arrowEndX = len > gap ? ax - (dx / len) * gap : ax;
-          const arrowEndY = len > gap ? ay - (dy / len) * gap : ay;
-          return (
-            <g style={{ pointerEvents: 'none' }}>
-              <line x1={asx} y1={asy} x2={arrowEndX} y2={arrowEndY}
-                stroke="rgba(255,255,255,0.75)" strokeWidth={1.5}
-                markerEnd="url(#note-arrowhead)" clipPath="url(#pc)" />
-              <circle cx={ax} cy={ay} r={3.5}
-                fill="rgba(255,255,255,0.85)" clipPath="url(#pc)" />
-              <rect x={bx - hw} y={by - hh} width={boxW} height={boxH}
-                rx={10} ry={10}
-                fill="rgba(255,255,255,0.4)" stroke="rgba(255,255,255,0.8)" strokeWidth={1.5}
-                clipPath="url(#pc)" />
-            </g>
-          );
-        })()}
-
         {/* Hover hairline + dot */}
         {hover && w > 0 && (
           <>
@@ -898,7 +827,7 @@ export default function ElevationChart({
           );
         })}
 
-        {/* Gel handles — rendered last so they're always on top */}
+        {/* Gel handles */}
         {w > 0 && gelZones?.map(zone => {
           const cx = kmToX(zone.centerKm);
           const cy = eleToY(bs(data, zone.centerKm).ele);
@@ -912,6 +841,94 @@ export default function ElevationChart({
             />
           );
         })}
+
+        {/* Profile notes — rendered last to stay above all chart content */}
+        {w > 0 && notes?.map(note => {
+          const isEditing = editingNoteId === note.id;
+          const textForSize = isEditing ? editingText : note.text;
+          const { lines, boxW, boxH } = noteSize(textForSize);
+          const bx = kmToX(note.boxKm);
+          const by = MT + note.boxFracY * plotH;
+          const ax = kmToX(note.anchorKm);
+          const ay = eleToY(note.anchorEle);
+          const dx = ax - bx, dy = ay - by;
+          const hw = boxW / 2, hh = boxH / 2;
+          const tMin = Math.min(Math.abs(dx) > 0.01 ? hw / Math.abs(dx) : Infinity, Math.abs(dy) > 0.01 ? hh / Math.abs(dy) : Infinity);
+          const asx = bx + tMin * dx, asy = by + tMin * dy;
+          const firstLineY = by - hh + NOTE_PAD + NOTE_FONT;
+          const len = Math.sqrt(dx * dx + dy * dy);
+          const gap = 3.5 + 20;
+          const arrowEndX = len > gap ? ax - (dx / len) * gap : ax;
+          const arrowEndY = len > gap ? ay - (dy / len) * gap : ay;
+          return (
+            <g key={note.id}>
+              {!isEditing && (
+                <line x1={asx} y1={asy} x2={arrowEndX} y2={arrowEndY}
+                  className="pn-arrow" stroke="rgba(255,255,255,0.75)" strokeWidth={1.5}
+                  markerEnd="url(#note-arrowhead)" clipPath="url(#pc)"
+                  style={{ pointerEvents: 'none' }} />
+              )}
+              <circle cx={ax} cy={ay} r={3.5}
+                className="pn-anchor" fill="rgba(255,255,255,0.85)" clipPath="url(#pc)"
+                style={{ pointerEvents: 'none' }} />
+              {!isEditing && (
+                <rect x={bx - hw} y={by - hh} width={boxW} height={boxH}
+                  rx={10} ry={10}
+                  className="pn-box" fill="rgba(255,255,255,0.4)" stroke="rgba(255,255,255,0.8)" strokeWidth={1.5}
+                  clipPath="url(#pc)"
+                  style={{ cursor: 'move' }}
+                  onMouseDown={e => { e.stopPropagation(); setDraggingNote({ id: note.id, startClientX: e.clientX, startClientY: e.clientY }); }}
+                />
+              )}
+              {!isEditing && (
+                <text textAnchor="middle" className="pn-text" fill="rgba(255,255,255,1)"
+                  fontSize={NOTE_FONT} fontFamily="system-ui,Arial,sans-serif"
+                  clipPath="url(#pc)" style={{ pointerEvents: 'none' }}>
+                  {lines.map((line, i) => (
+                    <tspan key={i} x={bx} y={firstLineY + i * NOTE_LINE_H}>{line || ' '}</tspan>
+                  ))}
+                </text>
+              )}
+              {!isEditing && (
+                <g className="pn-delete" style={{ cursor: 'pointer' }}
+                  onClick={e => { e.stopPropagation(); onNotesChange?.(notesRef.current.filter(n => n.id !== note.id)); }}>
+                  <circle cx={bx + hw - 7} cy={by - hh + 7} r={7} fill="rgba(0,0,0,0.5)" />
+                  <text x={bx + hw - 7} y={by - hh + 11} textAnchor="middle"
+                    fill="#fff" fontSize={9} fontFamily="Arial,sans-serif"
+                    style={{ pointerEvents: 'none' }}>✕</text>
+                </g>
+              )}
+            </g>
+          );
+        })}
+
+        {/* Note placement preview: anchor dot + box following cursor */}
+        {w > 0 && addingNote === 'box' && pendingAnchor && cursorPos && (() => {
+          const { boxW, boxH } = noteSize('');
+          const bx = cursorPos.x, by = cursorPos.y;
+          const ax = kmToX(pendingAnchor.km), ay = eleToY(pendingAnchor.ele);
+          const dx = ax - bx, dy = ay - by;
+          const hw = boxW / 2, hh = boxH / 2;
+          const tMin = Math.min(Math.abs(dx) > 0.01 ? hw / Math.abs(dx) : Infinity, Math.abs(dy) > 0.01 ? hh / Math.abs(dy) : Infinity);
+          const asx = bx + tMin * dx, asy = by + tMin * dy;
+          const len = Math.sqrt(dx * dx + dy * dy);
+          const gap = 3.5 + 20;
+          const arrowEndX = len > gap ? ax - (dx / len) * gap : ax;
+          const arrowEndY = len > gap ? ay - (dy / len) * gap : ay;
+          return (
+            <g style={{ pointerEvents: 'none' }}>
+              <line x1={asx} y1={asy} x2={arrowEndX} y2={arrowEndY}
+                stroke="rgba(255,255,255,0.75)" strokeWidth={1.5}
+                markerEnd="url(#note-arrowhead)" clipPath="url(#pc)" />
+              <circle cx={ax} cy={ay} r={3.5}
+                fill="rgba(255,255,255,0.85)" clipPath="url(#pc)" />
+              <rect x={bx - hw} y={by - hh} width={boxW} height={boxH}
+                rx={10} ry={10}
+                fill="rgba(255,255,255,0.4)" stroke="rgba(255,255,255,0.8)" strokeWidth={1.5}
+                clipPath="url(#pc)" />
+            </g>
+          );
+        })()}
       </svg>
 
       {/* Note editing textarea overlay */}
@@ -927,7 +944,7 @@ export default function ElevationChart({
             value={editingText}
             onChange={e => setEditingText(e.target.value)}
             onBlur={() => {
-              onNotesChange?.(notesRef.current.map(n => n.id === editingNoteId ? { ...n, text: editingText } : n));
+              onNotesChange?.(notesRef.current.map(n => n.id === editingNoteId ? { ...n, text: editingTextRef.current } : n));
               setEditingNoteId(null);
             }}
             onKeyDown={e => {

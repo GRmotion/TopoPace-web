@@ -506,15 +506,31 @@ export default function App() {
       <main style={{ flex: 1, display: 'flex', minHeight: 0 }}>
         <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative' }}>
 
-          {/* Hover strip to peek sidebar when auto-hidden */}
+          {/* Narrow rail — visible when sidebar is auto-hidden */}
           {sidebarAutoHide && (
             <div
-              style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 16, zIndex: 499, cursor: 'e-resize' }}
+              style={{
+                width: 32, flexShrink: 0,
+                background: 'var(--bg-card)', borderRight: '1px solid var(--border)',
+                display: 'flex', flexDirection: 'column', alignItems: 'center',
+                paddingTop: 14, zIndex: 498, cursor: 'pointer',
+              }}
+              title="Show sidebar"
               onMouseEnter={() => {
                 if (sidebarLeaveTimerRef.current) clearTimeout(sidebarLeaveTimerRef.current);
                 setSidebarPeeking(true);
               }}
-            />
+              onMouseLeave={() => {
+                sidebarLeaveTimerRef.current = setTimeout(() => setSidebarPeeking(false), 150);
+              }}
+              onClick={() => {
+                setSidebarAutoHide(false);
+                localStorage.setItem('topopace_sidebar_autohide', '0');
+                setSidebarPeeking(false);
+              }}
+            >
+              <span style={{ fontSize: 14, color: 'var(--text-hint)', userSelect: 'none', lineHeight: 1 }}>›</span>
+            </div>
           )}
 
           {/* ── Sidebar ── */}
@@ -524,7 +540,7 @@ export default function App() {
               background: 'var(--bg-card)', borderRight: '1px solid var(--border)',
               display: 'flex', flexDirection: 'column', flexShrink: 0, overflow: 'hidden',
               ...(sidebarAutoHide ? {
-                position: 'absolute', top: 0, bottom: 0, left: 0, zIndex: 500,
+                position: 'absolute', top: 0, bottom: 0, left: 32, zIndex: 500,
                 transform: sidebarPeeking ? 'translateX(0)' : 'translateX(-100%)',
                 transition: 'transform 200ms cubic-bezier(0,0,0,1)',
                 boxShadow: sidebarPeeking ? '4px 0 24px rgba(0,0,0,0.45)' : 'none',
@@ -541,11 +557,17 @@ export default function App() {
             }}
           >
             <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, padding: 14, minHeight: 0 }}>
-              {/* Sidebar collapse toggle */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: -4 }}>
+              {/* Trails + collapse toggle on same row */}
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <button
+                  data-tutorial="trails-btn"
+                  className="ghost"
+                  style={{ flex: 1, fontSize: 12, padding: '6px 0' }}
+                  onClick={() => setTrailsOpen(true)}
+                >🏔 My Trails</button>
                 <button
                   className="ghost"
-                  style={{ fontSize: 14, padding: '2px 7px', lineHeight: 1, color: 'var(--text-hint)' }}
+                  style={{ fontSize: 14, padding: '2px 7px', lineHeight: 1, color: 'var(--text-hint)', flexShrink: 0 }}
                   title={sidebarAutoHide ? 'Pin sidebar open' : 'Enable auto-hide'}
                   onClick={() => {
                     const next = !sidebarAutoHide;
@@ -555,13 +577,6 @@ export default function App() {
                   }}
                 >{sidebarAutoHide ? '›' : '‹'}</button>
               </div>
-              {/* Trails button — always visible */}
-              <button
-                data-tutorial="trails-btn"
-                className="ghost"
-                style={{ width: '100%', fontSize: 12, padding: '6px 0' }}
-                onClick={() => setTrailsOpen(true)}
-              >🏔 My Trails</button>
 
               {route ? (
                 <>

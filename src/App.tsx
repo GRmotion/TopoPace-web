@@ -92,6 +92,8 @@ export default function App() {
   );
   const [sidebarPeeking, setSidebarPeeking] = useState(false);
   const sidebarLeaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [sunDate, setSunDate] = useState('');
+  const [sunDialogOpen, setSunDialogOpen] = useState(false);
 
   useEffect(() => {
     if (profileMode === 'chart') setChartHeight(h => Math.max(h, 300));
@@ -657,8 +659,41 @@ export default function App() {
                 gelResults={route && advancedSettings.gelEnabled ? gelResults : []}
                 showGels={uiSettings.showGels}
               />
+              {/* Sun date dialog */}
+              {route && sunDialogOpen && (
+                <div
+                  style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1050 }}
+                  onClick={() => setSunDialogOpen(false)}
+                >
+                  <div
+                    style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, padding: '20px 24px', boxShadow: '0 8px 32px rgba(0,0,0,0.65)', minWidth: 240 }}
+                    onClick={e => e.stopPropagation()}
+                  >
+                    <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>☀️ Sun on the trail</div>
+                    <div style={{ color: 'var(--text-secondary)', fontSize: 12, marginBottom: 14, lineHeight: 1.5 }}>
+                      Solar elevation overlaid on the profile, based on race date and schedule.
+                    </div>
+                    <label style={{ display: 'block', marginBottom: 6 }}>Race date</label>
+                    <input
+                      type="date"
+                      value={sunDate}
+                      onChange={e => setSunDate(e.target.value)}
+                      style={{ width: '100%', fontSize: 13, marginBottom: 14 }}
+                      autoFocus
+                    />
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button className="primary" style={{ flex: 1, fontSize: 12 }} onClick={() => setSunDialogOpen(false)}>Apply</button>
+                      {sunDate && (
+                        <button className="ghost" style={{ fontSize: 12 }} onClick={() => { setSunDate(''); setSunDialogOpen(false); }}>Clear</button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {route && (
                 <div
+                  data-tutorial="map-settings"
                   style={{
                     position: 'absolute', top: 8, right: 8, zIndex: 1001,
                     background: 'var(--bg-card)', border: '1px solid var(--border)',
@@ -736,6 +771,15 @@ export default function App() {
                           >● Show gels {uiSettings.showGels ? 'On' : 'Off'}</button>
                         </div>
                       )}
+                      {/* Sun elevation */}
+                      <div>
+                        <label style={{ display: 'block', marginBottom: 6 }}>Sun</label>
+                        <button
+                          className={sunDate ? 'primary' : 'ghost'}
+                          style={{ fontSize: 12, padding: '3px 8px', width: '100%', textAlign: 'left' }}
+                          onClick={() => setSunDialogOpen(true)}
+                        >☀ {sunDate || 'Set date…'}</button>
+                      </div>
                     </div>
                   ) : (
                     <div style={{ padding: '6px 10px', display: 'flex', gap: 6, alignItems: 'center', cursor: 'default' }}>
@@ -821,6 +865,7 @@ export default function App() {
                       gelResults={advancedSettings.gelInSchedule ? gelResults : []}
                       showScheduleLabels={profileMode === 'chart'}
                       onGelRemove={handleGelRemove}
+                      sunDate={sunDate || undefined}
                       timeFormat={uiSettings.timeFormat}
                       distUnit={uiSettings.distUnit}
                       conflictTerrainIds={conflictTerrainIds}

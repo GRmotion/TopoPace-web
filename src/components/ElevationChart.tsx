@@ -2,6 +2,7 @@ import { useRef, useState, useLayoutEffect, useEffect, useMemo } from 'react';
 import type { TrackPoint, Checkpoint, TrackSegment, TerrainSegment, GelZone, CheckpointResult, GelResult, ProfileNote, ProfileEmoji } from '../models/types';
 import EmojiPicker from './EmojiPicker';
 import { paceAtDist, elapsedMsAtDist, formatTime, formatPace, formatDist, distMAtRaceElapsedMs } from '../algorithm/PacePlanner';
+import { solarElevationDeg } from '../utils/solar';
 
 const ML = 50, MR = 14, MT = 10, MB = 28;
 const NOTE_FONT = 12, NOTE_LINE_H = 17, NOTE_CHAR_W = 7, NOTE_PAD = 10;
@@ -48,6 +49,7 @@ interface Props {
   results?: CheckpointResult[];
   gelResults?: GelResult[];
   showScheduleLabels?: boolean;
+  sunDate?: string;
   timeFormat?: '12h' | '24h';
   distUnit?: 'km' | 'mi';
   conflictTerrainIds?: Set<string>;
@@ -99,6 +101,7 @@ export default function ElevationChart({
   notes, onNotesChange,
   emojis, onEmojisChange,
   results, gelResults, showScheduleLabels,
+  sunDate,
   timeFormat = '24h', distUnit = 'km', conflictTerrainIds,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -331,6 +334,23 @@ export default function ElevationChart({
       .map(p => ({ km: p.distFromStart / 1000, ele: p.ele })),
     [points]);
 
+  const avgLat = useMemo(() => points.length ? points.reduce((s, p) => s + p.lat, 0) / points.length : 0, [points]);
+  const avgLon = useMemo(() => points.length ? points.reduce((s, p) => s + p.lon, 0) / points.length : 0, [points]);
+
+  const sunSamples = useMemo(() => {
+    if (!sunDate || !segments?.length || !raceStartTime || data.length < 2) return null;
+    const startUTC = new Date(`${sunDate}T${raceStartTime}:00Z`);
+    const step = Math.max(1, Math.floor(data.length / 150));
+    const out: { km: number; el: number }[] = [];
+    for (let i = 0; i < data.length; i += step) {
+      const pt = data[i];
+      const elMs = elapsedMsAtDist(segments, checkpoints, raceStartTime, pt.km * 1000);
+      if (elMs == null) continue;
+      out.push({ km: pt.km, el: solarElevationDeg(new Date(startUTC.getTime() + elMs), avgLat, avgLon) });
+    }
+    return out.length >= 2 ? out : null;
+  }, [sunDate, segments, checkpoints, raceStartTime, data, avgLat, avgLon]);
+
   if (data.length < 2) return <div ref={containerRef} style={{ height }} />;
 
   const minKm = data[0].km;
@@ -397,6 +417,14 @@ export default function ElevationChart({
   const pts = w > 0 ? data.map(d => `${kmToX(d.km).toFixed(1)},${eleToY(d.ele).toFixed(1)}`).join(' L ') : '';
   const linePath = pts ? `M ${pts}` : '';
   const areaPath = pts ? `M ${pts} L ${kmToX(maxKm).toFixed(1)},${(MT + plotH).toFixed(1)} L ${kmToX(minKm).toFixed(1)},${(MT + plotH).toFixed(1)} Z` : '';
+
+  // Sun elevation polyline: -18° → bottom, +90° → top of plot
+  const sunLinePath = (sunSamples && w > 0)
+    ? `M ${sunSamples.map(s => {
+        const fracY = 1 - (s.el + 18) / 108; // clamped by clipPath
+        return `${kmToX(s.km).toFixed(1)},${(MT + fracY * plotH).toFixed(1)}`;
+      }).join(' L ')}`
+    : null;
 
   // Axes
   const yStep = [5, 10, 25, 50, 100, 250, 500].find(v => eleRange / v <= 8) ?? 500;
@@ -789,6 +817,12 @@ export default function ElevationChart({
         {/* Elevation area + line */}
         {linePath && <path d={areaPath} fill="url(#eg)" clipPath="url(#pc)" />}
         {linePath && <path d={linePath} fill="none" stroke="#4caf50" strokeWidth={1.5} clipPath="url(#pc)" />}
+
+        {/* Sun elevation line */}
+        {sunLinePath && (
+          <path d={sunLinePath} fill="none" stroke="#ffd54f" strokeWidth={2}
+            strokeOpacity={0.5} clipPath="url(#pc)" style={{ pointerEvents: 'none' }} />
+        )}
 
         {/* Hover hairline + dot (or + icon when picking anchor) */}
         {hover && w > 0 && (

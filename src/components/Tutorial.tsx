@@ -101,6 +101,13 @@ const STEPS: Step[] = [
     placement: 'top',
   },
   {
+    id: 'map-settings',
+    title: 'Map Settings',
+    body: 'Hover the ⚙ panel to switch map style (Street / Topo / Satellite), change line colour, toggle terrain and gel overlays, and set a race date to see the sun elevation curve on the profile — a yellow line showing how high the sun is at each point of your race.',
+    target: 'map-settings',
+    placement: 'left',
+  },
+  {
     id: 'print',
     title: 'Print',
     body: 'Export your race plan as a PDF. Open the print view with the current mode — table or profile strip — and save or print from your browser.',

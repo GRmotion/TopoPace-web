@@ -432,7 +432,7 @@ export default function ElevationChart({
     if (!sunSamples || w === 0) return null;
     const px = sunSamples.map(s => ({
       x: kmToX(s.km),
-      y: MT + (1 - (s.el + 18) / 108) * plotH,
+      y: MT + (1 - (s.el + 6) / 96) * plotH,
     }));
     if (px.length < 2) return null;
     let d = `M ${px[0].x.toFixed(1)},${px[0].y.toFixed(1)}`;

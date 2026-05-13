@@ -563,6 +563,10 @@ export default function ElevationChart({
           <marker id="note-arrowhead" markerWidth="6" markerHeight="6" refX="5.5" refY="3" orient="auto">
             <polygon className="pn-arrowhead" points="0 0.5, 6 3, 0 5.5" fill="rgba(255,255,255,0.75)" />
           </marker>
+          <linearGradient id="note-bg" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox">
+            <stop offset="0%" stopColor="#ffffff" stopOpacity={0.4} />
+            <stop offset="100%" stopColor="#ffffff" stopOpacity={0.2} />
+          </linearGradient>
         </defs>
 
         {/* Grid */}
@@ -881,17 +885,19 @@ export default function ElevationChart({
               onMouseEnter={() => setHoveredNoteId(note.id)}
               onMouseLeave={() => setHoveredNoteId(null)}
             >
-              <line x1={asx} y1={asy} x2={arrowEndX} y2={arrowEndY}
-                className="pn-arrow" stroke="rgba(255,255,255,0.75)" strokeWidth={1.5}
-                markerEnd="url(#note-arrowhead)" clipPath="url(#pc)"
-                style={{ pointerEvents: 'none' }} />
+              {len >= 100 && (
+                <line x1={asx} y1={asy} x2={arrowEndX} y2={arrowEndY}
+                  className="pn-arrow" stroke="rgba(255,255,255,0.75)" strokeWidth={1.5}
+                  markerEnd="url(#note-arrowhead)" clipPath="url(#pc)"
+                  style={{ pointerEvents: 'none' }} />
+              )}
               <circle cx={ax} cy={ay} r={3.5}
                 className="pn-anchor" fill="rgba(255,255,255,0.85)" clipPath="url(#pc)"
                 style={{ pointerEvents: 'none' }} />
               {!isEditing && (
                 <rect x={bx - hw} y={by - hh} width={boxW} height={boxH}
                   rx={10} ry={10}
-                  className="pn-box" fill="rgba(255,255,255,0.4)" stroke="rgba(255,255,255,0.8)" strokeWidth={1.5}
+                  className="pn-box" fill="url(#note-bg)" stroke="rgba(255,255,255,0.8)" strokeWidth={1.5}
                   clipPath="url(#pc)"
                   style={{ cursor: 'move' }}
                   onMouseDown={e => { e.stopPropagation(); setDraggingNote({ id: note.id, startClientX: e.clientX, startClientY: e.clientY }); }}
@@ -910,7 +916,8 @@ export default function ElevationChart({
                 <g className="pn-delete" style={{ cursor: 'pointer' }}
                   onClick={e => { e.stopPropagation(); onNotesChange?.(notesRef.current.filter(n => n.id !== note.id)); }}>
                   <circle cx={bx + hw - 11} cy={by - hh + 11} r={7} fill="rgba(0,0,0,0.5)" />
-                  <text x={bx + hw - 11} y={by - hh + 15} textAnchor="middle"
+                  <text x={bx + hw - 11} y={by - hh + 11} textAnchor="middle"
+                    dominantBaseline="central"
                     fill="#fff" fontSize={9} fontFamily="Arial,sans-serif"
                     style={{ pointerEvents: 'none' }}>✕</text>
                 </g>
@@ -977,7 +984,7 @@ export default function ElevationChart({
               minHeight: boxH,
               height: 'auto',
               resize: 'none',
-              background: 'rgba(255,255,255,0.4)',
+              background: 'linear-gradient(to bottom, rgba(255,255,255,0.4), rgba(255,255,255,0.2))',
               border: '1.5px solid rgba(255,255,255,0.8)',
               borderRadius: 10,
               color: 'rgba(255,255,255,1)',
@@ -1217,12 +1224,12 @@ export default function ElevationChart({
         {onNotesChange && (
           <button
             style={{
-              background: addingNote !== 'idle' ? 'rgba(76,175,80,0.35)' : 'rgba(0,0,0,0.55)',
-              color: '#4caf50',
-              border: '1px solid rgba(76,175,80,0.6)',
-              borderRadius: 3, fontSize: 10, padding: '0 6px', cursor: 'pointer',
-              height: 18, display: 'flex', alignItems: 'center',
-              boxShadow: '0 1px 4px rgba(0,0,0,.35)', userSelect: 'none',
+              background: addingNote !== 'idle' ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.55)',
+              color: '#fff',
+              border: '1px solid rgba(255,255,255,0.5)',
+              borderRadius: 3, fontSize: 13, padding: 0, cursor: 'pointer',
+              width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 1px 4px rgba(0,0,0,.35)', userSelect: 'none', flexShrink: 0,
             }}
             onMouseDown={e => e.stopPropagation()}
             onClick={e => {
@@ -1231,7 +1238,7 @@ export default function ElevationChart({
               else setAddingNote('anchor');
             }}
             title={addingNote !== 'idle' ? 'Cancel note' : 'Add note'}
-          >✎ note</button>
+          >✎</button>
         )}
         {zoomView && (
           <button

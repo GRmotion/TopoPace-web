@@ -581,7 +581,7 @@ export default function ElevationChart({
         ref={svgRef}
         width="100%"
         height={totalSvgH}
-        style={{ display: 'block', cursor: midPanning ? 'grabbing' : addingNote !== 'idle' ? 'crosshair' : draggingCpId || hoveredTerrainEdge || resizingTerrain ? 'ew-resize' : zoomView ? 'grab' : (onClickDist || onClickDistTyped) ? 'crosshair' : 'default' }}
+        style={{ display: 'block', cursor: midPanning ? 'grabbing' : addingNote !== 'idle' ? 'crosshair' : draggingCpId || hoveredTerrainEdge || resizingTerrain ? 'ew-resize' : (onClickDist || onClickDistTyped) ? 'crosshair' : 'default' }}
         onMouseMove={onMove}
         onMouseLeave={onLeave}
         onMouseDown={onDown}

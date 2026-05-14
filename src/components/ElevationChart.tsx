@@ -443,7 +443,7 @@ export default function ElevationChart({
     if (!sunSamples || w === 0) return null;
     const px = sunSamples.map(s => ({
       x: kmToX(s.km),
-      y: MT + (1 - (s.el + 3) / 80) * plotH,
+      y: MT + badgeH + (1 - (s.el + 3) / 80) * (plotH - badgeH),
     }));
     if (px.length < 2) return null;
     let d = `M ${px[0].x.toFixed(1)},${px[0].y.toFixed(1)}`;
@@ -856,8 +856,8 @@ export default function ElevationChart({
 
         {/* Sun elevation line */}
         {sunLinePath && sunSamples && (() => {
-          const firstY = MT + (1 - (sunSamples[0].el + 3) / 80) * plotH;
-          const labelY = Math.max(MT + 10, Math.min(MT + plotH - 4, firstY));
+          const firstY = MT + badgeH + (1 - (sunSamples[0].el + 3) / 80) * (plotH - badgeH);
+          const labelY = Math.max(MT + badgeH + 10, Math.min(MT + plotH - 4, firstY));
           return (<>
             <path className="sun-line" d={sunLinePath} fill="none" stroke="#ffd54f" strokeWidth={2}
               strokeOpacity={0.5} clipPath="url(#pc)" style={{ pointerEvents: 'none' }} />

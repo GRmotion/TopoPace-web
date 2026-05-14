@@ -817,8 +817,8 @@ export default function ElevationChart({
             const num = cpIdxMap.get(cp.id) ?? fallbackIdx.get(cp.id) ?? 1;
             return (
               <g key={cp.id}>
-                {/* Line starts from bottom of circle in schedule mode, not above it */}
-                <line x1={x} y1={showScheduleLabels ? MT + 42 : MT} x2={x} y2={MT + plotH}
+                {/* Line starts from bottom of badge in both modes */}
+                <line x1={x} y1={showScheduleLabels ? MT + 42 : MT + 18} x2={x} y2={MT + plotH}
                   stroke={col} strokeWidth={1.5}
                   strokeDasharray={showScheduleLabels ? '4,3' : undefined}
                   clipPath="url(#pc)" />
@@ -843,7 +843,25 @@ export default function ElevationChart({
                     >{num}</text>
                   </>
                 ) : (
-                  <text x={x + 3} y={MT + 11} fill={col} fontSize={10} clipPath="url(#pc)">{cp.name}</text>
+                  <>
+                    {cp.type === 'aid' ? (
+                      <circle cx={x} cy={MT + 9} r={9} fill={col} clipPath="url(#pc)"
+                        style={{ pointerEvents: 'none' }}
+                      />
+                    ) : (
+                      /* POI: same rounded triangle shifted to top of chart */
+                      <path
+                        d={`M${x - 1.5} ${MT + 2.6} Q${x} ${MT} ${x + 1.5} ${MT + 2.6} L${x + 8} ${MT + 13.9} Q${x + 9.5} ${MT + 16.5} ${x + 6.5} ${MT + 16.5} L${x - 6.5} ${MT + 16.5} Q${x - 9.5} ${MT + 16.5} ${x - 8} ${MT + 13.9} Z`}
+                        fill={col} clipPath="url(#pc)"
+                        style={{ pointerEvents: 'none' }}
+                      />
+                    )}
+                    <text x={x} y={cp.type === 'aid' ? MT + 12 : MT + 14}
+                      textAnchor="middle" fill="#000"
+                      fontSize={9} fontWeight="700" clipPath="url(#pc)"
+                      style={{ pointerEvents: 'none' }}
+                    >{num}</text>
+                  </>
                 )}
               </g>
             );

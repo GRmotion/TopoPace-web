@@ -41,6 +41,7 @@ export async function parseFitActivity(buffer: ArrayBuffer): Promise<ParsedActiv
           distFromStart: dist,
           ele: r.altitude ?? r.enhanced_altitude ?? 0,
           timestamp: r.timestamp instanceof Date ? r.timestamp.getTime() : Number(r.timestamp) * 1000,
+          heartRate: r.heart_rate != null ? Number(r.heart_rate) : undefined,
         };
       });
 

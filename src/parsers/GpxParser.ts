@@ -9,7 +9,7 @@ export interface ParsedRoute {
 }
 
 export interface ParsedActivity {
-  points: Array<{ distFromStart: number; ele: number; timestamp: number }>;
+  points: Array<{ distFromStart: number; ele: number; timestamp: number; heartRate?: number }>;
   totalDistM: number;
   durationSec: number;
 }

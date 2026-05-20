@@ -29,7 +29,9 @@ function buildRawSegments(points: TrackPoint[], profile: typeof DEFAULT_PROFILE,
     const grade = horizDist > 0 ? (eleEnd - eleStart) / horizDist : 0;
     const t = segStart / totalDistM;
     const aggrFactor = aggressiveness !== 0 ? 1 + aggressiveness * (1 - 2 * t) : 1;
-    const fatigueRamp = (1 + profile.fatigueRatePerHundredKm * t) * aggrFactor;
+    // staminaDecoupling replaces fatigueRatePerHundredKm; read old field name for backward compat
+    const stamina = profile.staminaDecoupling ?? (profile as unknown as Record<string, number>)['fatigueRatePerHundredKm'] ?? DEFAULT_PROFILE.staminaDecoupling;
+    const fatigueRamp = (1 + stamina * t) * aggrFactor;
     segments.push({
       startDist: segStart,
       endDist: segEnd,

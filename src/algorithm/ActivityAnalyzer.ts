@@ -6,6 +6,7 @@ interface ActivityPoint {
   distFromStart: number;
   ele: number;
   timestamp: number; // Unix ms
+  heartRate?: number; // bpm — present in FIT files, optional in GPX
 }
 
 // Grade buckets: descents ... flat ... climbs
@@ -58,7 +59,7 @@ export function analyzeActivity(
 
   // Collect flat paces for baseline
   const flatPaces: number[] = [];
-  const allSegments: Array<{ grade: number; paceSecPerKm: number; distM: number }> = [];
+  const allSegments: Array<{ grade: number; paceSecPerKm: number; distM: number; heartRate?: number }> = [];
 
   for (let d = 0; d < totalDistM - SEG; d += SEG) {
     const p0 = interpPoint(rawPoints, smoothed, d);
@@ -70,7 +71,8 @@ export function analyzeActivity(
     const speedMps = SEG / elapsedSec;
     if (speedMps < 0.3 || speedMps > 8) continue; // exclude stops and sprints
     const paceSecPerKm = 1000 / speedMps;
-    allSegments.push({ grade, paceSecPerKm, distM: d });
+    const hr = p0.heartRate != null && p1.heartRate != null ? (p0.heartRate + p1.heartRate) / 2 : undefined;
+    allSegments.push({ grade, paceSecPerKm, distM: d, heartRate: hr });
     if (Math.abs(grade) < 0.03) flatPaces.push(paceSecPerKm);
   }
 
@@ -114,8 +116,26 @@ export function analyzeActivity(
   const climbFactor = climbValues.length >= 5 ? percentile(climbValues, 50) : 1.0;
   const descentFactor = descentValues.length >= 5 ? percentile(descentValues, 50) : 1.0;
 
-  const { slope } = linearRegression(fatigueXs, fatigueYs);
-  const fatigueRatePerHundredKm = Math.max(0, Math.min(0.5, slope * 100));
+  // Stamina: prefer aerobic decoupling (HR:GAP) if HR data is available.
+  // Aerobic decoupling = (EF_firstHalf - EF_secondHalf) / EF_firstHalf
+  // where EF (efficiency factor) = grade-adjusted speed / heart rate.
+  // Falls back to pace-vs-distance regression when HR is absent.
+  const midDist = totalDistM / 2;
+  const hrSegs = allSegments.filter(s => s.heartRate && s.heartRate > 50 && s.heartRate < 220);
+  const ef1st = hrSegs.filter(s => s.distM < midDist)
+    .map(s => (1 / (s.paceSecPerKm / costFactor(s.grade))) / s.heartRate!);
+  const ef2nd = hrSegs.filter(s => s.distM >= midDist)
+    .map(s => (1 / (s.paceSecPerKm / costFactor(s.grade))) / s.heartRate!);
+
+  let staminaDecoupling: number;
+  if (ef1st.length >= 10 && ef2nd.length >= 10) {
+    const avgEF1 = ef1st.reduce((a, b) => a + b, 0) / ef1st.length;
+    const avgEF2 = ef2nd.reduce((a, b) => a + b, 0) / ef2nd.length;
+    staminaDecoupling = Math.max(0, Math.min(0.5, (avgEF1 - avgEF2) / avgEF1));
+  } else {
+    const { slope } = linearRegression(fatigueXs, fatigueYs);
+    staminaDecoupling = Math.max(0, Math.min(0.5, slope * 100));
+  }
 
   // Max speed caps: 5th percentile = "fastest realistic" (lowest sec/km = fastest)
   const maxClimbPaceSecPerKm = steepClimbPaces.length >= 10
@@ -126,7 +146,7 @@ export function analyzeActivity(
     : undefined;
 
   const thisResult: CalibrationResult = {
-    profile: { climbFactor, descentFactor, fatigueRatePerHundredKm, maxClimbPaceSecPerKm, maxDescentPaceSecPerKm },
+    profile: { climbFactor, descentFactor, staminaDecoupling, maxClimbPaceSecPerKm, maxDescentPaceSecPerKm },
     activityCount: 1,
     distanceKm: distKm,
   };
@@ -137,7 +157,7 @@ export function analyzeActivity(
 function mergeResults(existing: CalibrationResult[], current: CalibrationResult | null): CalibrationResult {
   const all = current ? [...existing, current] : existing;
   if (all.length === 0) {
-    return { profile: { climbFactor: 1, descentFactor: 1, fatigueRatePerHundredKm: 0.08 }, activityCount: 0, distanceKm: 0 };
+    return { profile: { climbFactor: 1, descentFactor: 1, staminaDecoupling: 0.08 }, activityCount: 0, distanceKm: 0 };
   }
   const n = all.length;
   const avg = (key: keyof PersonalProfile) =>
@@ -150,7 +170,8 @@ function mergeResults(existing: CalibrationResult[], current: CalibrationResult 
     profile: {
       climbFactor: avg('climbFactor'),
       descentFactor: avg('descentFactor'),
-      fatigueRatePerHundredKm: avg('fatigueRatePerHundredKm'),
+      // backward compat: old saved calibrations use fatigueRatePerHundredKm
+      staminaDecoupling: all.reduce((s, r) => s + (r.profile.staminaDecoupling ?? (r.profile as unknown as Record<string, number>)['fatigueRatePerHundredKm'] ?? 0.08), 0) / n,
       maxClimbPaceSecPerKm: climbCaps.length > 0 ? climbCaps.reduce((a, b) => a + b, 0) / climbCaps.length : undefined,
       maxDescentPaceSecPerKm: descentCaps.length > 0 ? descentCaps.reduce((a, b) => a + b, 0) / descentCaps.length : undefined,
     },
@@ -159,21 +180,23 @@ function mergeResults(existing: CalibrationResult[], current: CalibrationResult 
   };
 }
 
-interface InterpResult { ele: number; timestamp: number }
+interface InterpResult { ele: number; timestamp: number; heartRate?: number }
 
 function interpPoint(rawPoints: ActivityPoint[], smoothed: TrackPoint[], distM: number): InterpResult | null {
   const n = rawPoints.length;
   if (n < 2) return null;
-  if (distM <= rawPoints[0].distFromStart) return { ele: smoothed[0].ele, timestamp: rawPoints[0].timestamp };
-  if (distM >= rawPoints[n - 1].distFromStart) return { ele: smoothed[n - 1].ele, timestamp: rawPoints[n - 1].timestamp };
+  if (distM <= rawPoints[0].distFromStart) return { ele: smoothed[0].ele, timestamp: rawPoints[0].timestamp, heartRate: rawPoints[0].heartRate };
+  if (distM >= rawPoints[n - 1].distFromStart) return { ele: smoothed[n - 1].ele, timestamp: rawPoints[n - 1].timestamp, heartRate: rawPoints[n - 1].heartRate };
   let lo = 0, hi = n - 1;
   while (lo < hi - 1) {
     const mid = (lo + hi) >> 1;
     if (rawPoints[mid].distFromStart <= distM) lo = mid; else hi = mid;
   }
   const t = (distM - rawPoints[lo].distFromStart) / (rawPoints[hi].distFromStart - rawPoints[lo].distFromStart);
+  const hrLo = rawPoints[lo].heartRate, hrHi = rawPoints[hi].heartRate;
   return {
     ele: smoothed[lo].ele + t * (smoothed[hi].ele - smoothed[lo].ele),
     timestamp: rawPoints[lo].timestamp + t * (rawPoints[hi].timestamp - rawPoints[lo].timestamp),
+    heartRate: hrLo != null && hrHi != null ? hrLo + t * (hrHi - hrLo) : hrLo ?? hrHi,
   };
 }

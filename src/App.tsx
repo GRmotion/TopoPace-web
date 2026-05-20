@@ -253,7 +253,26 @@ export default function App() {
   }, []);
 
   const handleResizeTerrain = useCallback((id: string, startKm: number, endKm: number) => {
-    setTerrainSegs(prev => prev.map(t => t.id === id ? { ...t, startKm, endKm } : t));
+    setTerrainSegs(prev => {
+      const current = prev.find(t => t.id === id);
+      if (!current) return prev;
+      const others = prev.filter(t => t.id !== id);
+      // Determine which edge is moving so we clamp only that edge
+      const movingStart = Math.abs(startKm - current.startKm) > Math.abs(endKm - current.endKm);
+      let s = startKm;
+      let e = endKm;
+      if (movingStart) {
+        // Start edge moving — clamp: cannot cross any other segment that ends left of fixed end
+        const fence = others.reduce((max, o) => o.endKm <= endKm ? Math.max(max, o.endKm) : max, -Infinity);
+        if (isFinite(fence)) s = Math.max(s, fence);
+      } else {
+        // End edge moving — clamp: cannot cross any other segment that starts right of fixed start
+        const fence = others.reduce((min, o) => o.startKm >= startKm ? Math.min(min, o.startKm) : min, Infinity);
+        if (isFinite(fence)) e = Math.min(e, fence);
+      }
+      if (s >= e) return prev;
+      return prev.map(t => t.id === id ? { ...t, startKm: s, endKm: e } : t);
+    });
   }, []);
 
   const [removedTerrain, setRemovedTerrain] = useState<{ seg: TerrainSegment; index: number } | null>(null);

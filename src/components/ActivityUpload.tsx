@@ -32,7 +32,7 @@ function InfoPopup({ result, anchorRect }: { result: CalibrationResult; anchorRe
       <Row label="Climb factor" value={`×${p.climbFactor.toFixed(2)}`}
         hint={p.climbFactor > 1 ? 'slower than Minetti' : p.climbFactor < 1 ? 'faster than Minetti' : 'Minetti default'} />
       <Row label="Descent factor" value={`×${p.descentFactor.toFixed(2)}`} />
-      <Row label="Fatigue" value={`${(p.fatigueRatePerHundredKm * 100).toFixed(1)}%`} hint="per 100 km" />
+      <Row label="Stamina" value={`${((p.staminaDecoupling ?? (p as unknown as Record<string, number>)['fatigueRatePerHundredKm'] ?? 0.08) * 100).toFixed(1)}%`} hint="aerobic decoupling" />
       {p.maxClimbPaceSecPerKm && (
         <Row label="Max climb pace" value={formatPace(p.maxClimbPaceSecPerKm) + '/km'} hint="≥8% grade" />
       )}
@@ -142,7 +142,7 @@ export default function ActivityUpload({ existing, onCalibrate, onReset }: Props
         <div style={{ overflow: 'hidden' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 10 }}>
           <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-            Upload past activities to calibrate your personal GAP factors and fatigue rate.
+            Upload past activities to calibrate your personal GAP factors and stamina (aerobic decoupling).
           </div>
 
           <button

@@ -44,7 +44,7 @@ export interface Checkpoint {
 export interface PersonalProfile {
   climbFactor: number;               // pace multiplier vs Minetti (1.0 = Minetti, 1.2 = 20% slower)
   descentFactor: number;
-  fatigueRatePerHundredKm: number;   // additional slowdown per 100 km (0.08 = 8%)
+  staminaDecoupling: number;         // aerobic decoupling 0–1: how much pace degrades by end of race (0.08 = 8%)
   maxClimbPaceSecPerKm?: number;     // fastest observed pace on steep uphills — hard cap
   maxDescentPaceSecPerKm?: number;   // fastest observed pace on steep downhills — hard cap
 }
@@ -52,7 +52,7 @@ export interface PersonalProfile {
 export const DEFAULT_PROFILE: PersonalProfile = {
   climbFactor: 1.0,
   descentFactor: 1.0,
-  fatigueRatePerHundredKm: 0.08,
+  staminaDecoupling: 0.08,
 };
 
 export interface TerrainSegment {

@@ -434,9 +434,9 @@ export default function Tutorial({ onDone }: Props) {
             {current.id === 'terrain' && plusAlpha > 0.01 && (
               <div style={{
                 position: 'absolute',
-                top: simPlot.t + 2, left: selLeft - 1,
+                top: simPlot.t + 2, left: selLeft,
                 transform: `scale(${plusScale})`,
-                transformOrigin: 'left top',
+                transformOrigin: 'center',
                 opacity: plusAlpha,
                 background: 'rgba(0,0,0,0.55)', color: '#fff',
                 border: '1.5px solid transparent', borderRadius: 3,

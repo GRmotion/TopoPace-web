@@ -4,6 +4,7 @@
 
 <!-- Format: - [ ] Description — repro steps / affected component -->
 - [ ] "New adventure" overwrites the current saved plan instead of creating a new entry. Plans must never be deleted implicitly — the only way to remove a plan is via explicit "Remove" in options. — affected: TrailsModal / autosave logic in App.tsx
+- [ ] If data for stamina calculation is not available, show information about this in personal calibration info.
 
 ## Features / Improvements
 
